@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from recommender import create_recommendation_request
 
 from planner import create_plan
 
@@ -62,6 +63,32 @@ def generate_plan(request: PlanRequest):
             interests=request.interests,
             category=request.category,
         )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+@app.post("/agent/recommend")
+def generate_recommendation(request: PlanRequest):
+    try:
+        plan_result = create_plan(
+            interests=request.interests,
+            category=request.category,
+        )
+
+        result = create_recommendation_request(
+            interests=request.interests,
+            category=request.category,
+            plan=plan_result["plan"],
+        )
+
+        return {
+            "plan": plan_result,
+            "recommendation": result,
+            "status": "request_prepared",
+        }
+
     except ValueError as error:
         raise HTTPException(
             status_code=400,
