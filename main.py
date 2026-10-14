@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from planner import create_plan
 from recommender import create_recommendation_request
 from reviewer import review_recommendations
+from executor import execute_recommendation
 
 
 app = FastAPI(
@@ -73,33 +74,42 @@ def generate_plan(request: PlanRequest):
         )
 
 
+
+
+
+
 @app.post("/agent/recommend")
 def generate_recommendation(request: PlanRequest):
     try:
-        # Agent 1: Create the workflow plan
+        # Agent 1: Planner
         plan_result = create_plan(
             interests=request.interests,
             category=request.category,
         )
 
-        # Agent 2: Prepare the recommendation request
+        # Agent 2: Recommender
         recommendation_result = create_recommendation_request(
             interests=request.interests,
             category=request.category,
             plan=plan_result["plan"],
         )
 
-        # Agent 3: Review the recommendation data
+        # Agent 3: Reviewer
         review_result = review_recommendations(
             recommendation_result
         )
 
-        # Return the complete workflow result
+        # Agent 4: Executor
+        final_result = execute_recommendation(
+            review_result
+        )
+
         return {
             "plan": plan_result,
             "recommendation": recommendation_result,
             "review": review_result,
-            "status": "review_completed",
+            "final_result": final_result,
+            "status": "workflow_completed",
         }
 
     except ValueError as error:
@@ -107,6 +117,7 @@ def generate_recommendation(request: PlanRequest):
             status_code=400,
             detail=str(error),
         )
+
 
 
 
