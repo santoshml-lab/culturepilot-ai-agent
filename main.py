@@ -1,6 +1,9 @@
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from planner import create_plan
 
 app = FastAPI(
     title="CulturePilot AI Agent",
@@ -21,6 +24,11 @@ app.add_middleware(
 )
 
 
+class PlanRequest(BaseModel):
+    interests: str = Field(min_length=1, max_length=250)
+    category: str = Field(min_length=1, max_length=30)
+
+
 @app.get("/")
 def home():
     return {
@@ -38,10 +46,25 @@ def health():
 @app.get("/agent/status")
 def agent_status():
     return {
-        "planner": "planned",
-        "researcher": "awaiting_qloo_api",
+        "planner": "implemented",
+        "researcher": "pending_qloo_api",
         "recommender": "planned",
         "reviewer": "planned",
         "executor": "planned",
         "qloo_connected": False,
     }
+
+
+@app.post("/agent/plan")
+def generate_plan(request: PlanRequest):
+    try:
+        return create_plan(
+            interests=request.interests,
+            category=request.category,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
