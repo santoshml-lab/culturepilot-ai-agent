@@ -53,12 +53,18 @@ def health():
 def agent_status():
     return {
         "planner": "implemented",
-        "researcher": "pending_qloo_api",
+        "researcher": "scaffold_ready_waiting_for_qloo",
         "recommender": "implemented_scaffold",
         "reviewer": "implemented",
-        "executor": "pending",
+        "executor": "implemented",
         "qloo_connected": False,
+        "workflow": "planner_researcher_recommender_reviewer_executor",
     }
+
+
+
+
+
 
 
 @app.post("/agent/plan")
