@@ -7,6 +7,7 @@ from reviewer import review_recommendations
 
 from planner import create_plan
 
+
 app = FastAPI(
     title="CulturePilot AI Agent",
     description="Agentic AI for personalized cultural discovery.",
