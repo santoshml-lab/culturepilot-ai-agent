@@ -7,6 +7,7 @@ from planner import create_plan
 from recommender import create_recommendation_request
 from reviewer import review_recommendations
 from executor import execute_recommendation
+from researcher import research_cultural_data
 
 
 app = FastAPI(
@@ -74,10 +75,6 @@ def generate_plan(request: PlanRequest):
         )
 
 
-
-
-
-
 @app.post("/agent/recommend")
 def generate_recommendation(request: PlanRequest):
     try:
@@ -87,25 +84,37 @@ def generate_recommendation(request: PlanRequest):
             category=request.category,
         )
 
-        # Agent 2: Recommender
+        # Agent 2: Researcher
+        research_result = research_cultural_data(
+            interests=request.interests,
+            category=request.category,
+        )
+
+        # Agent 3: Recommender
         recommendation_result = create_recommendation_request(
             interests=request.interests,
             category=request.category,
             plan=plan_result["plan"],
         )
 
-        # Agent 3: Reviewer
+        # Attach the research status for transparency
+        recommendation_result["research_status"] = (
+            research_result["status"]
+        )
+
+        # Agent 4: Reviewer
         review_result = review_recommendations(
             recommendation_result
         )
 
-        # Agent 4: Executor
+        # Agent 5: Executor
         final_result = execute_recommendation(
             review_result
         )
 
         return {
             "plan": plan_result,
+            "research": research_result,
             "recommendation": recommendation_result,
             "review": review_result,
             "final_result": final_result,
@@ -117,6 +126,15 @@ def generate_recommendation(request: PlanRequest):
             status_code=400,
             detail=str(error),
         )
+
+
+
+
+
+
+
+
+
 
 
 
