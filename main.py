@@ -2,10 +2,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from recommender import create_recommendation_request
-from reviewer import review_recommendations
 
 from planner import create_plan
+from recommender import create_recommendation_request
+from reviewer import review_recommendations
 
 
 app = FastAPI(
@@ -13,6 +13,7 @@ app = FastAPI(
     description="Agentic AI for personalized cultural discovery.",
     version="1.0.0",
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,9 +52,9 @@ def agent_status():
     return {
         "planner": "implemented",
         "researcher": "pending_qloo_api",
-        "recommender": "planned",
-        "reviewer": "planned",
-        "executor": "planned",
+        "recommender": "implemented_scaffold",
+        "reviewer": "implemented",
+        "executor": "pending",
         "qloo_connected": False,
     }
 
@@ -71,24 +72,34 @@ def generate_plan(request: PlanRequest):
             detail=str(error),
         )
 
+
 @app.post("/agent/recommend")
 def generate_recommendation(request: PlanRequest):
     try:
+        # Agent 1: Create the workflow plan
         plan_result = create_plan(
             interests=request.interests,
             category=request.category,
         )
 
-        result = create_recommendation_request(
+        # Agent 2: Prepare the recommendation request
+        recommendation_result = create_recommendation_request(
             interests=request.interests,
             category=request.category,
             plan=plan_result["plan"],
         )
 
+        # Agent 3: Review the recommendation data
+        review_result = review_recommendations(
+            recommendation_result
+        )
+
+        # Return the complete workflow result
         return {
             "plan": plan_result,
-            "recommendation": result,
-            "status": "request_prepared",
+            "recommendation": recommendation_result,
+            "review": review_result,
+            "status": "review_completed",
         }
 
     except ValueError as error:
@@ -96,6 +107,7 @@ def generate_recommendation(request: PlanRequest):
             status_code=400,
             detail=str(error),
         )
+
 
 
 
