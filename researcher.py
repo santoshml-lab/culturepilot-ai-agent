@@ -109,6 +109,11 @@ def research_cultural_data(
 
         # Step 2: Request recommendations for the entity.
         stage = "insights"
+        print("QLOO INSIGHTS PARAMS:", {
+            "filter.type": CATEGORY_TYPES[category],
+            "signal.interests.entities": entity_id,
+            "take": 10,
+})
 
         insights_response = requests.get(
             f"{QLOO_BASE_URL}/v2/insights",
