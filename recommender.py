@@ -4,47 +4,58 @@ import re
 
 INTEREST_ALIASES = {
     "sci-fi": [
-        "science fiction", "science-fiction", "futuristic",
-        "space", "alien", "technology", "artificial intelligence"
+        "science fiction", "futuristic", "space exploration",
+        "alien", "artificial intelligence"
     ],
     "science fiction": [
-        "sci-fi", "science-fiction", "futuristic",
-        "space", "alien", "technology"
+        "sci-fi", "futuristic", "space exploration",
+        "alien", "artificial intelligence"
     ],
-    "space": [
-        "spacecraft", "astronaut", "galaxy", "planet",
-        "cosmic", "orbital", "spaceflight"
-    ],
-    "exploration": [
-        "explore", "discovery", "expedition", "mission", "journey"
-    ],
-    "alien": [
-        "aliens", "extraterrestrial", "non-human", "lifeform"
+    "space exploration": [
+        "spacecraft", "astronaut", "galaxy", "spaceflight",
+        "space mission", "planetary exploration"
     ],
     "intelligent aliens": [
-        "alien", "aliens", "extraterrestrial",
-        "artificial intelligence", "intelligence"
+        "extraterrestrial intelligence", "alien intelligence",
+        "intelligent extraterrestrial", "alien civilization",
+        "first contact"
     ],
     "time travel": [
-        "time-travel", "time loop", "timeline",
-        "temporal", "back in time", "time machine"
+        "time-travel", "time machine", "time loop",
+        "travels through time", "travel through time",
+        "back in time", "temporal journey", "timeline"
     ],
     "artificial intelligence": [
-        "ai", "intelligent machines", "robot", "android",
-        "artificial life", "machine intelligence"
+        "machine intelligence", "intelligent machine",
+        "android", "sentient robot", "artificial life"
     ],
-    "robot": ["robots", "robotic", "android", "artificial intelligence"],
-    "adventure": ["adventurous", "expedition", "journey", "exploration"],
-    "comedy": ["comedic", "humor", "humour", "funny", "satire"],
-    "horror": ["terrifying", "fear", "supernatural", "creature"],
-    "travel": ["destination", "tourism", "journey", "traveler"],
-    "food": ["cuisine", "restaurant", "dish", "culinary", "dining"],
+    "adventure": [
+        "expedition", "exploration", "adventurous journey"
+    ],
+    "comedy": [
+        "comedic", "humorous", "black comedy", "satire"
+    ],
+    "horror": [
+        "horror film", "supernatural horror", "creature horror"
+    ],
 }
 
 
 def normalize(text):
+    """Normalize text while preserving word boundaries."""
     text = str(text or "").lower()
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
+def contains_phrase(text, phrase):
+    """Match a complete phrase, not a substring inside another word."""
+    normalized_text = f" {normalize(text)} "
+    normalized_phrase = f" {normalize(phrase)} "
+
+    if normalized_phrase.strip() == "":
+        return False
+
+    return normalized_phrase in normalized_text
 
 
 def split_interests(interests):
@@ -56,10 +67,13 @@ def split_interests(interests):
 
 
 def get_interest_signals(interest):
-    signals = {normalize(interest)}
+    normalized_interest = normalize(interest)
+    signals = {normalized_interest}
 
+    # Only expand aliases when the user actually entered
+    # the corresponding interest phrase.
     for key, aliases in INTEREST_ALIASES.items():
-        if key in interest:
+        if normalized_interest == normalize(key):
             signals.update(normalize(alias) for alias in aliases)
 
     return {signal for signal in signals if signal}
@@ -81,57 +95,67 @@ def score_recommendation(item, interests):
         or ""
     )
 
-    searchable_text = normalize(f"{title} {description}")
-
+    # Use title and description separately so title-only matches
+    # cannot outweigh the actual recommendation details.
     matched_interests = []
+    title_matches = []
     direct_matches = 0
 
     for interest in interests:
-        normalized_interest = normalize(interest)
         signals = get_interest_signals(interest)
 
-        # Exact phrase match is a stronger relevance signal.
-        if normalized_interest and normalized_interest in searchable_text:
-            matched_interests.append(interest)
-            direct_matches += 1
-            continue
+        direct_match = any(
+            contains_phrase(title, signal)
+            or contains_phrase(description, signal)
+            for signal in signals
+        )
 
-        # Otherwise, check known related terms.
-        if any(signal in searchable_text for signal in signals):
+        if direct_match:
             matched_interests.append(interest)
+
+            if contains_phrase(title, normalize(interest)):
+                title_matches.append(interest)
+
+            if (
+                contains_phrase(title, normalize(interest))
+                or contains_phrase(description, normalize(interest))
+            ):
+                direct_matches += 1
 
     total_interests = max(len(interests), 1)
+    match_count = len(matched_interests)
 
-    # This is a heuristic relevance score, not an AI probability.
-    score = 15 + (
-        75 * len(matched_interests) / total_interests
-    )
+    # Conservative heuristic: no matching interest means a low score.
+    if match_count == 0:
+        score = 10
+        reason = (
+            "No strong keyword match was found for your stated interests. "
+            "This item was returned by Qloo but may be less relevant."
+        )
+    else:
+        coverage = match_count / total_interests
+        score = round(20 + (60 * coverage) + (
+            10 * direct_matches / total_interests
+        ))
 
-    score += 10 * direct_matches / total_interests
-    score = round(min(100, score))
+        if title_matches:
+            score = min(100, score + 5)
 
-    if matched_interests:
         reason = (
             "Related to your interests: "
             + ", ".join(matched_interests)
             + "."
         )
-    else:
-        reason = (
-            "Suggested by Qloo, but no strong keyword match "
-            "was found for your stated interests."
-        )
 
     return {
         "title": title,
-        "category": item.get("category") or properties.get("type"),
-        "description": description or (
-            f"A recommendation in {title} related to {interests[0]}."
-        ),
+        "category": None,
+        "description": description or "No additional description available.",
         "entity_id": item.get("entity_id") or item.get("id"),
         "source": "Qloo",
         "match_score": score,
         "match_reason": reason,
+        "matched_interests": matched_interests,
     }
 
 
@@ -159,7 +183,7 @@ def create_recommendation_request(
         recommendation["category"] = category
         recommendations.append(recommendation)
 
-    # Highest relevance score first.
+    # Rank stronger matches first; preserve input order for ties.
     recommendations.sort(
         key=lambda item: item["match_score"],
         reverse=True
@@ -176,11 +200,12 @@ def create_recommendation_request(
         ),
         "recommendations": recommendations,
         "message": (
-            f"Ranked {len(recommendations)} recommendations using "
-            "interest-based relevance scoring."
+            f"Ranked {len(recommendations)} recommendations "
+            "using conservative keyword relevance scoring."
             if recommendations
             else "No usable recommendations were returned by Qloo."
         ),
     }
+
 
 
