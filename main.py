@@ -50,7 +50,7 @@ def health():
 
 @app.get("/agent/status")
 def agent_status():
-return {
+    return {
 "planner": "implemented",
 "researcher": "implemented",
 "recommender": "implemented_scaffold",
