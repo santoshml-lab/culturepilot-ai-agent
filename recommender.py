@@ -4,39 +4,69 @@ import re
 
 INTEREST_ALIASES = {
     "sci-fi": [
-        "science fiction", "futuristic", "space exploration",
-        "alien", "artificial intelligence"
+        "science fiction",
+        "futuristic",
+        "space exploration",
+        "alien",
+        "artificial intelligence",
     ],
     "science fiction": [
-        "sci-fi", "futuristic", "space exploration",
-        "alien", "artificial intelligence"
+        "sci-fi",
+        "futuristic",
+        "space exploration",
+        "alien",
+        "artificial intelligence",
     ],
     "space exploration": [
-        "spacecraft", "astronaut", "galaxy", "spaceflight",
-        "space mission", "planetary exploration"
+        "spacecraft",
+        "astronaut",
+        "galaxy",
+        "spaceflight",
+        "space mission",
+        "planetary exploration",
     ],
     "intelligent aliens": [
-        "extraterrestrial intelligence", "alien intelligence",
-        "intelligent extraterrestrial", "alien civilization",
-        "first contact"
+        "extraterrestrial intelligence",
+        "alien intelligence",
+        "intelligent extraterrestrial",
+        "alien civilization",
+        "first contact",
+        "intelligent alien",
+        "extraterrestrial",
     ],
     "time travel": [
-        "time-travel", "time machine", "time loop",
-        "travels through time", "travel through time",
-        "back in time", "temporal journey", "timeline"
+        "time-travel",
+        "time machine",
+        "time loop",
+        "travels through time",
+        "travel through time",
+        "back in time",
+        "temporal journey",
+        "timeline",
     ],
     "artificial intelligence": [
-        "machine intelligence", "intelligent machine",
-        "android", "sentient robot", "artificial life"
+        "machine intelligence",
+        "intelligent machine",
+        "android",
+        "sentient robot",
+        "artificial life",
+        "robotics",
     ],
     "adventure": [
-        "expedition", "exploration", "adventurous journey"
+        "expedition",
+        "exploration",
+        "adventurous journey",
     ],
     "comedy": [
-        "comedic", "humorous", "black comedy", "satire"
+        "comedic",
+        "humorous",
+        "black comedy",
+        "satire",
     ],
     "horror": [
-        "horror film", "supernatural horror", "creature horror"
+        "horror film",
+        "supernatural horror",
+        "creature horror",
     ],
 }
 
@@ -52,7 +82,7 @@ def contains_phrase(text, phrase):
     normalized_text = f" {normalize(text)} "
     normalized_phrase = f" {normalize(phrase)} "
 
-    if normalized_phrase.strip() == "":
+    if not normalized_phrase.strip():
         return False
 
     return normalized_phrase in normalized_text
@@ -70,13 +100,57 @@ def get_interest_signals(interest):
     normalized_interest = normalize(interest)
     signals = {normalized_interest}
 
-    # Only expand aliases when the user actually entered
-    # the corresponding interest phrase.
     for key, aliases in INTEREST_ALIASES.items():
         if normalized_interest == normalize(key):
             signals.update(normalize(alias) for alias in aliases)
 
     return {signal for signal in signals if signal}
+
+
+def get_image_url(item):
+    """Extract the image URL from the Qloo entity response."""
+    properties = item.get("properties") or {}
+
+    image = (
+        item.get("image")
+        or properties.get("image")
+    )
+
+    if isinstance(image, dict):
+        url = image.get("url")
+    elif isinstance(image, str):
+        url = image
+    else:
+        url = None
+
+    # Only retain ordinary HTTP/HTTPS image URLs.
+    if isinstance(url, str) and url.startswith(("https://", "http://")):
+        return url
+
+    return None
+
+
+def get_genres(item):
+    """Read genre information from common Qloo response locations."""
+    properties = item.get("properties") or {}
+
+    genres = (
+        item.get("genres")
+        or properties.get("genres")
+        or []
+    )
+
+    if isinstance(genres, str):
+        return [genres]
+
+    if isinstance(genres, list):
+        return [
+            str(genre)
+            for genre in genres
+            if isinstance(genre, (str, int, float))
+        ]
+
+    return []
 
 
 def score_recommendation(item, interests):
@@ -95,8 +169,21 @@ def score_recommendation(item, interests):
         or ""
     )
 
-    # Use title and description separately so title-only matches
-    # cannot outweigh the actual recommendation details.
+    genres = get_genres(item)
+    keywords = (
+        item.get("keywords")
+        or properties.get("keywords")
+        or []
+    )
+
+    if not isinstance(keywords, list):
+        keywords = []
+
+    # Include genres and keywords in relevance matching.
+    metadata_text = " ".join(
+        [str(value) for value in genres + keywords]
+    )
+
     matched_interests = []
     title_matches = []
     direct_matches = 0
@@ -104,18 +191,21 @@ def score_recommendation(item, interests):
     for interest in interests:
         signals = get_interest_signals(interest)
 
-        direct_match = any(
-            contains_phrase(title, signal)
-            or contains_phrase(description, signal)
+        # Match the user's interest or its aliases against Qloo data.
+        matched = any(
+            contains_phrase(text, signal)
+            for text in (title, description, metadata_text)
             for signal in signals
         )
 
-        if direct_match:
+        if matched:
             matched_interests.append(interest)
 
             if contains_phrase(title, normalize(interest)):
                 title_matches.append(interest)
 
+            # Direct match means the exact entered interest appears
+            # in the title or description.
             if (
                 contains_phrase(title, normalize(interest))
                 or contains_phrase(description, normalize(interest))
@@ -125,7 +215,6 @@ def score_recommendation(item, interests):
     total_interests = max(len(interests), 1)
     match_count = len(matched_interests)
 
-    # Conservative heuristic: no matching interest means a low score.
     if match_count == 0:
         score = 10
         reason = (
@@ -134,9 +223,12 @@ def score_recommendation(item, interests):
         )
     else:
         coverage = match_count / total_interests
-        score = round(20 + (60 * coverage) + (
-            10 * direct_matches / total_interests
-        ))
+
+        score = round(
+            20
+            + (60 * coverage)
+            + (10 * direct_matches / total_interests)
+        )
 
         if title_matches:
             score = min(100, score + 5)
@@ -150,7 +242,11 @@ def score_recommendation(item, interests):
     return {
         "title": title,
         "category": None,
-        "description": description or "No additional description available.",
+        "description": (
+            description or "No additional description available."
+        ),
+        "image_url": get_image_url(item),
+        "genres": genres,
         "entity_id": item.get("entity_id") or item.get("id"),
         "source": "Qloo",
         "match_score": score,
@@ -163,10 +259,10 @@ def create_recommendation_request(
     interests,
     category,
     plan=None,
-    cultural_data=None
+    cultural_data=None,
 ):
-    interests = interests.strip()
-    category = category.strip().title()
+    interests = (interests or "").strip()
+    category = (category or "").strip().title()
 
     if not interests:
         raise ValueError("Please provide at least one interest.")
@@ -179,14 +275,17 @@ def create_recommendation_request(
         if not isinstance(item, dict):
             continue
 
-        recommendation = score_recommendation(item, interest_list)
+        recommendation = score_recommendation(
+            item,
+            interest_list,
+        )
         recommendation["category"] = category
         recommendations.append(recommendation)
 
     # Rank stronger matches first; preserve input order for ties.
     recommendations.sort(
         key=lambda item: item["match_score"],
-        reverse=True
+        reverse=True,
     )
 
     recommendations = recommendations[:10]
@@ -201,11 +300,12 @@ def create_recommendation_request(
         "recommendations": recommendations,
         "message": (
             f"Ranked {len(recommendations)} recommendations "
-            "using conservative keyword relevance scoring."
+            "using keyword relevance scoring and Qloo metadata."
             if recommendations
             else "No usable recommendations were returned by Qloo."
         ),
     }
+
 
 
 
