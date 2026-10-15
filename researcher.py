@@ -67,6 +67,7 @@ def research_cultural_data(
 
         search_response.raise_for_status()
         search_data = search_response.json()
+        print("QLOO SEARCH RESPONSE:", search_response.text[:3000])
 
         entities = search_data.get("results", [])
         if not entities:
