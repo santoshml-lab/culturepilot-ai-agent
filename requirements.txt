@@ -4,3 +4,4 @@ uvicorn
 groq
 python-dotenv
 httpx
+requests
