@@ -48,18 +48,23 @@ def home():
 def health():
     return {"status": "healthy"}
 
-
 @app.get("/agent/status")
 def agent_status():
-    return {
-        "planner": "implemented",
-        "researcher": "scaffold_ready_waiting_for_qloo",
-        "recommender": "implemented_scaffold",
-        "reviewer": "implemented",
-        "executor": "implemented",
-        "qloo_connected": False,
-        "workflow": "planner_researcher_recommender_reviewer_executor",
-    }
+return {
+"planner": "implemented",
+"researcher": "implemented",
+"recommender": "implemented_scaffold",
+"reviewer": "implemented",
+"executor": "implemented",
+"qloo_connected": "check_via_recommend_endpoint",
+"workflow": "planner_researcher_recommender_reviewer_executor"
+}
+
+
+
+
+    
+
 
 
 
