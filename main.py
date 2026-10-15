@@ -122,6 +122,12 @@ def generate_recommendation(request: PlanRequest):
         final_result = execute_recommendation(
             review_result
         )
+        
+        plan_result["qloo_connected"] = (
+        research_result.get("status") == "success"
+      0  and research_result.get("source") == "Qloo"
+)
+
 
         return {
             "plan": plan_result,
