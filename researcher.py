@@ -283,6 +283,73 @@ def research_cultural_data(
         insights_response.raise_for_status()
         insights_data = insights_response.json()
         results = _extract_entities(insights_data)
+        
+        # Fallback: if the genre tag returns no results,
+        # try Qloo entity-based Insights instead.
+        if tag_id and not results:
+            print("QLOO TAG RETURNED 0 RESULTS; TRYING ENTITY FALLBACK")
+
+            fallback_search = requests.get(
+                f"{QLOO_BASE_URL}/search",
+                headers=headers,
+                params={
+                    "query": search_term,
+                    "types": category_type,
+                    "take": 5,
+                },
+                timeout=TIMEOUT,
+            )
+            fallback_search.raise_for_status()
+            fallback_data = fallback_search.json()
+            fallback_entities = fallback_data.get("results", [])
+
+            if isinstance(fallback_entities, dict):
+                fallback_entities = fallback_entities.get(
+                    "entities", []
+                )
+
+            fallback_entity_id = None
+
+            if isinstance(fallback_entities, list):
+                for entity in fallback_entities:
+                    if isinstance(entity, dict):
+                        fallback_entity_id = (
+                            entity.get("entity_id")
+                            or entity.get("id")
+                        )
+                        if fallback_entity_id:
+                            break
+
+            if fallback_entity_id:
+                fallback_params = {
+                    "filter.type": category_type,
+                    "signal.interests.entities": fallback_entity_id,
+                    "take": 10,
+                }
+
+                print("QLOO FALLBACK INSIGHTS PARAMS:", fallback_params)
+
+                fallback_response = requests.get(
+                    f"{QLOO_BASE_URL}/v2/insights",
+                    headers=headers,
+                    params=fallback_params,
+                    timeout=TIMEOUT,
+                )
+                fallback_response.raise_for_status()
+
+                fallback_insights = fallback_response.json()
+                fallback_results = _extract_entities(
+                    fallback_insights
+                )
+
+                print(
+                    "QLOO FALLBACK RESULT COUNT:",
+                    len(fallback_results),
+                )
+
+                if fallback_results:
+                    results = fallback_results
+
 
         print(
             "QLOO INSIGHTS RESULT COUNT:",
