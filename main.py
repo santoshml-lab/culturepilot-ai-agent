@@ -102,11 +102,18 @@ def generate_recommendation(request: PlanRequest):
         )
 
         # Agent 3: Recommender
+        
         recommendation_result = create_recommendation_request(
             interests=request.interests,
             category=request.category,
             plan=plan_result["plan"],
-        )
+            cultural_data=research_result.get("results", []),
+)
+
+            
+            
+            
+        
 
         # Attach the research status for transparency
         recommendation_result["research_status"] = (
