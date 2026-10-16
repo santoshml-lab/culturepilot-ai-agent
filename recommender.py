@@ -2,6 +2,9 @@
 import re
 
 
+MIN_MATCH_SCORE = 60
+RESULT_LIMIT = 10
+
 INTEREST_ALIASES = {
     "sci-fi": [
         "science fiction",
@@ -68,30 +71,44 @@ INTEREST_ALIASES = {
         "supernatural horror",
         "creature horror",
     ],
+    "indie pop": [
+        "indie pop",
+        "independent pop",
+    ],
+    "indian street food": [
+        "indian street food",
+        "street food",
+        "indian cuisine",
+    ],
+    "mountain destinations": [
+        "mountain destinations",
+        "mountain travel",
+        "mountains",
+    ],
 }
 
 
 def normalize(text):
     """Normalize text while preserving word boundaries."""
-    text = str(text or "").lower()
+    text = str(text or "").casefold()
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def contains_phrase(text, phrase):
-    """Match a complete phrase, not a substring inside another word."""
+    """Match a normalized complete phrase."""
     normalized_text = f" {normalize(text)} "
-    normalized_phrase = f" {normalize(phrase)} "
+    normalized_phrase = normalize(phrase)
 
-    if not normalized_phrase.strip():
+    if not normalized_phrase:
         return False
 
-    return normalized_phrase in normalized_text
+    return f" {normalized_phrase} " in normalized_text
 
 
 def split_interests(interests):
     return [
-        item.strip().lower()
-        for item in interests.split(",")
+        item.strip().casefold()
+        for item in (interests or "").split(",")
         if item.strip()
     ]
 
@@ -108,13 +125,9 @@ def get_interest_signals(interest):
 
 
 def get_image_url(item):
-    """Extract the image URL from the Qloo entity response."""
+    """Extract an ordinary HTTP/HTTPS image URL."""
     properties = item.get("properties") or {}
-
-    image = (
-        item.get("image")
-        or properties.get("image")
-    )
+    image = item.get("image") or properties.get("image")
 
     if isinstance(image, dict):
         url = image.get("url")
@@ -123,7 +136,6 @@ def get_image_url(item):
     else:
         url = None
 
-    # Only retain ordinary HTTP/HTTPS image URLs.
     if isinstance(url, str) and url.startswith(("https://", "http://")):
         return url
 
@@ -131,14 +143,9 @@ def get_image_url(item):
 
 
 def get_genres(item):
-    """Read genre information from common Qloo response locations."""
+    """Read genre metadata from common response locations."""
     properties = item.get("properties") or {}
-
-    genres = (
-        item.get("genres")
-        or properties.get("genres")
-        or []
-    )
+    genres = item.get("genres") or properties.get("genres") or []
 
     if isinstance(genres, str):
         return [genres]
@@ -153,97 +160,144 @@ def get_genres(item):
     return []
 
 
+def get_keywords(item):
+    """Read keyword metadata safely."""
+    properties = item.get("properties") or {}
+    keywords = item.get("keywords") or properties.get("keywords") or []
+
+    if isinstance(keywords, str):
+        return [keywords]
+
+    if isinstance(keywords, list):
+        return [
+            str(value)
+            for value in keywords
+            if isinstance(value, (str, int, float))
+        ]
+
+    return []
+
+
 def score_recommendation(item, interests):
     properties = item.get("properties") or {}
 
     title = (
         item.get("name")
         or properties.get("name")
+        or item.get("title")
+        or properties.get("title")
         or "Untitled recommendation"
     )
 
     description = (
         properties.get("short_description")
         or properties.get("description")
+        or item.get("short_description")
         or item.get("description")
         or ""
     )
 
     genres = get_genres(item)
-    keywords = (
-        item.get("keywords")
-        or properties.get("keywords")
-        or []
-    )
+    keywords = get_keywords(item)
 
-    if not isinstance(keywords, list):
-        keywords = []
-
-    # Include genres and keywords in relevance matching.
-    metadata_text = " ".join(
-        [str(value) for value in genres + keywords]
-    )
+    normalized_title = normalize(title)
+    normalized_description = normalize(description)
+    normalized_genres = normalize(" ".join(genres))
+    normalized_keywords = normalize(" ".join(keywords))
 
     matched_interests = []
     title_matches = []
-    direct_matches = 0
+    genre_matches = []
+    keyword_matches = []
+    description_matches = []
 
     for interest in interests:
         signals = get_interest_signals(interest)
 
-        # Match the user's interest or its aliases against Qloo data.
-        matched = any(
-            contains_phrase(text, signal)
-            for text in (title, description, metadata_text)
-            for signal in signals
-        )
+        def matches_any(text):
+            return any(
+                contains_phrase(text, signal)
+                for signal in signals
+            )
 
-        if matched:
+        title_match = matches_any(normalized_title)
+        genre_match = matches_any(normalized_genres)
+        keyword_match = matches_any(normalized_keywords)
+        description_match = matches_any(normalized_description)
+
+        if any([
+            title_match,
+            genre_match,
+            keyword_match,
+            description_match,
+        ]):
             matched_interests.append(interest)
 
-            if contains_phrase(title, normalize(interest)):
-                title_matches.append(interest)
+        if title_match:
+            title_matches.append(interest)
 
-            # Direct match means the exact entered interest appears
-            # in the title or description.
-            if (
-                contains_phrase(title, normalize(interest))
-                or contains_phrase(description, normalize(interest))
-            ):
-                direct_matches += 1
+        if genre_match:
+            genre_matches.append(interest)
 
-    total_interests = max(len(interests), 1)
-    match_count = len(matched_interests)
+        if keyword_match:
+            keyword_matches.append(interest)
 
-    if match_count == 0:
+        if description_match:
+            description_matches.append(interest)
+
+    # Score the strongest evidence rather than rewarding repeated
+    # mentions of the same interest across every field.
+    score = 0
+
+    if title_matches:
+        score = max(score, 95)
+
+    if genre_matches:
+        score = max(score, 90)
+
+    if keyword_matches:
+        score = max(score, 80)
+
+    if description_matches:
+        score = max(score, 70)
+
+    # No matching evidence means this item is not recommended.
+    if not matched_interests:
         score = 10
         reason = (
-            "No strong keyword match was found for your stated interests. "
-            "This item was returned by Qloo but may be less relevant."
+            "No strong match was found for your interests. "
+            "This result has been excluded from recommendations."
         )
     else:
-        coverage = match_count / total_interests
-
-        score = round(
-            20
-            + (60 * coverage)
-            + (10 * direct_matches / total_interests)
-        )
+        evidence = []
 
         if title_matches:
-            score = min(100, score + 5)
+            evidence.append("title")
+
+        if genre_matches:
+            evidence.append("genre")
+
+        if keyword_matches:
+            evidence.append("keywords")
+
+        if description_matches:
+            evidence.append("description")
 
         reason = (
-            "Related to your interests: "
+            "Matched interests: "
             + ", ".join(matched_interests)
+            + ". Evidence: "
+            + ", ".join(evidence)
             + "."
         )
 
     return {
-        "title": title,
+        "title": str(title),
         "category": None,
         "description": (
-            description or "No additional description available."
+            str(description)
+            if description
+            else "No additional description available."
         ),
         "image_url": get_image_url(item),
         "genres": genres,
@@ -269,7 +323,7 @@ def create_recommendation_request(
 
     interest_list = split_interests(interests)
     results = cultural_data or []
-    recommendations = []
+    scored_recommendations = []
 
     for item in results:
         if not isinstance(item, dict):
@@ -279,32 +333,47 @@ def create_recommendation_request(
             item,
             interest_list,
         )
-        recommendation["category"] = category
-        recommendations.append(recommendation)
 
-    # Rank stronger matches first; preserve input order for ties.
+        recommendation["category"] = category
+        scored_recommendations.append(recommendation)
+
+    # Exclude weak matches before ranking.
+    recommendations = [
+        item
+        for item in scored_recommendations
+        if item["match_score"] >= MIN_MATCH_SCORE
+    ]
+
+    # Highest score first; input order is preserved for ties.
     recommendations.sort(
         key=lambda item: item["match_score"],
         reverse=True,
     )
 
-    recommendations = recommendations[:10]
+    recommendations = recommendations[:RESULT_LIMIT]
+
+    if recommendations:
+        message = (
+            f"Selected {len(recommendations)} recommendations "
+            f"with scores of at least {MIN_MATCH_SCORE}/100."
+        )
+        status = "success"
+    else:
+        message = (
+            "No recommendations met the minimum relevance score. "
+            "Try a different interest or a more specific query."
+        )
+        status = "no_results"
 
     return {
         "interests": interests,
         "category": category,
         "plan_received": bool(plan),
-        "recommendation_status": (
-            "success" if recommendations else "no_results"
-        ),
+        "recommendation_status": status,
         "recommendations": recommendations,
-        "message": (
-            f"Ranked {len(recommendations)} recommendations "
-            "using keyword relevance scoring and Qloo metadata."
-            if recommendations
-            else "No usable recommendations were returned by Qloo."
-        ),
+        "message": message,
     }
+
 
 
 
