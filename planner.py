@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from planner import create_plan, detect_category
+
 from recommender import create_recommendation_request
 from reviewer import review_recommendations
 from executor import execute_recommendation
