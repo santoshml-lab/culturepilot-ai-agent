@@ -8,6 +8,7 @@ from recommender import create_recommendation_request
 from reviewer import review_recommendations
 from executor import execute_recommendation
 from researcher import research_cultural_data
+from planner import create_plan, detect_category
 
 
 app = FastAPI(
