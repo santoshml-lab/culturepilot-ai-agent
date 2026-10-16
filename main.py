@@ -98,34 +98,43 @@ def agent_status():
 
 @app.post("/agent/plan")
 def generate_plan(request: PlanRequest):
+    interests = request.interests.strip()
     category = normalise_category(request.category)
 
     if not category:
+        category = detect_category(interests)
+
+    if not category:
         return {
-            "interests": request.interests.strip(),
-            "category": request.category,
-            "status": "needs_category",
+            "interests": interests,
+            "category": None,
+            "status": "unsupported_or_unclear_category",
             "message": (
-                "Choose a supported cultural category: "
-                "Movies, Music, Food, or Travel."
+                "Try Movies, Music, Food, or Travel."
             ),
-            "qloo_required": True,
-            "qloo_connected": False,
+            "plan": [],
         }
 
     try:
         return create_plan(
-            interests=request.interests.strip(),
+            interests=interests,
             category=category,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
 
+
+
+
+
+
 @app.post("/agent/recommend")
 def generate_recommendation(request: PlanRequest):
     interests = request.interests.strip()
     category = normalise_category(request.category)
+    if not category:
+    category = detect_category(interests)
 
     # Accept any query, but do not invent a Qloo entity type.
     if not category:
