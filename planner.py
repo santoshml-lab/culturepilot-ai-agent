@@ -9,6 +9,7 @@ from executor import execute_recommendation
 from researcher import research_cultural_data
 
 
+
 app = FastAPI(
     title="CulturePilot AI Agent",
     description="Qloo-powered cultural discovery agent.",
