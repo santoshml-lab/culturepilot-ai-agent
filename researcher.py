@@ -350,6 +350,7 @@ def research_cultural_data(interests: str, category: str) -> dict:
         except Exception as exc:
             print("QLOO TAG LOOKUP FAILED:", str(exc))
 
+        
         # Step 2: Retrieve recommendations associated with the tag.
         if tag_id:
             try:
@@ -357,12 +358,14 @@ def research_cultural_data(interests: str, category: str) -> dict:
                     headers,
                     {
                         "filter.type": category_type,
-                        "filter.tags": tag_id,
+                        "signal.interests.tags": tag_id,
                         "take": RESULT_LIMIT,
                     },
                 )
             except requests.RequestException as exc:
                 print("QLOO TAG INSIGHTS ERROR:", str(exc))
+
+                    
 
         # Step 3: Fall back to a named entity only when no tag results exist.
         if not results:
