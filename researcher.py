@@ -1,3 +1,4 @@
+
 import os
 import requests
 
@@ -27,7 +28,6 @@ GENRE_HINTS = {
 
 
 def _get_tag_list(data):
-    """Read tags from the common Qloo response structure."""
     if not isinstance(data, dict):
         return []
 
@@ -43,15 +43,13 @@ def _get_tag_list(data):
 
 
 def _find_tag_id(data, search_terms):
-    """Find an exact or close matching genre tag."""
     tags = _get_tag_list(data)
-
-    normalized_terms = {
+    terms = {
         term.casefold().strip()
         for term in search_terms
     }
 
-    # Prefer an exact name match.
+    # Exact match first.
     for tag in tags:
         if not isinstance(tag, dict):
             continue
@@ -59,11 +57,10 @@ def _find_tag_id(data, search_terms):
         name = str(tag.get("name") or "").casefold().strip()
         tag_id = tag.get("id") or tag.get("tag_id")
 
-        if name in normalized_terms and tag_id:
+        if name in terms and tag_id:
             return tag_id
 
-    # Allow a close match only when the requested term
-    # is contained in the tag name or vice versa.
+    # Conservative partial match.
     for tag in tags:
         if not isinstance(tag, dict):
             continue
@@ -74,17 +71,13 @@ def _find_tag_id(data, search_terms):
         if not name or not tag_id:
             continue
 
-        if any(
-            term in name or name in term
-            for term in normalized_terms
-        ):
+        if any(term == name or term in name for term in terms):
             return tag_id
 
     return None
 
 
 def _search_genre_tag(headers, search_term, category_type):
-    """Search Qloo tags and return a matching tag ID."""
     candidates = GENRE_HINTS.get(
         search_term.casefold().strip(),
         [search_term],
@@ -103,40 +96,23 @@ def _search_genre_tag(headers, search_term, category_type):
                 timeout=TIMEOUT,
             )
 
-            print(
-                "QLOO TAG SEARCH STATUS:",
-                response.status_code,
-            )
+            print("QLOO TAG SEARCH:", candidate, response.status_code)
             response.raise_for_status()
 
             data = response.json()
-            print(
-                "QLOO TAG SEARCH RESPONSE:",
-                response.text[:1200],
-            )
-
             tag_id = _find_tag_id(data, [candidate])
 
             if tag_id:
                 print("QLOO TAG FOUND:", tag_id)
                 return tag_id
 
-        except (
-            requests.RequestException,
-            ValueError,
-            TypeError,
-        ) as exc:
-            print(
-                "QLOO TAG SEARCH ERROR:",
-                type(exc).__name__,
-                str(exc),
-            )
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            print("QLOO TAG SEARCH ERROR:", str(exc))
 
     return None
 
 
 def _extract_entities(data):
-    """Extract entity results from the Qloo Insights response."""
     if not isinstance(data, dict):
         return []
 
@@ -149,10 +125,66 @@ def _extract_entities(data):
     return []
 
 
-def research_cultural_data(
-    interests: str,
-    category: str,
-) -> dict:
+def _search_entity(headers, search_term, category_type):
+    response = requests.get(
+        f"{QLOO_BASE_URL}/search",
+        headers=headers,
+        params={
+            "query": search_term,
+            "types": category_type,
+            "take": 5,
+        },
+        timeout=TIMEOUT,
+    )
+
+    print("QLOO ENTITY SEARCH STATUS:", response.status_code)
+    response.raise_for_status()
+
+    data = response.json()
+    entities = data.get("results", [])
+
+    if isinstance(entities, dict):
+        entities = entities.get("entities", [])
+
+    if not isinstance(entities, list):
+        return None
+
+    for entity in entities:
+        if not isinstance(entity, dict):
+            continue
+
+        entity_id = entity.get("entity_id") or entity.get("id")
+
+        if entity_id:
+            return entity_id
+
+    return None
+
+
+def _get_insights(headers, params):
+    print("QLOO INSIGHTS PARAMS:", params)
+
+    response = requests.get(
+        f"{QLOO_BASE_URL}/v2/insights",
+        headers=headers,
+        params=params,
+        timeout=TIMEOUT,
+    )
+
+    print("QLOO INSIGHTS STATUS:", response.status_code)
+    print("QLOO INSIGHTS RESPONSE:", response.text[:2000])
+
+    response.raise_for_status()
+
+    data = response.json()
+    results = _extract_entities(data)
+
+    print("QLOO INSIGHTS RESULT COUNT:", len(results))
+
+    return results
+
+
+def research_cultural_data(interests: str, category: str) -> dict:
     interests = (interests or "").strip()
     category = (category or "").strip().title()
 
@@ -164,9 +196,7 @@ def research_cultural_data(
             "agent": "researcher",
             "status": "unsupported_category",
             "results": [],
-            "message": (
-                "Supported categories: Movies, Music, Food, Travel."
-            ),
+            "message": "Supported categories: Movies, Music, Food, Travel.",
         }
 
     api_key = os.getenv("QLOO_API_KEY")
@@ -176,9 +206,7 @@ def research_cultural_data(
             "agent": "researcher",
             "status": "waiting_for_api_key",
             "results": [],
-            "message": (
-                "Qloo API key is not configured on the backend."
-            ),
+            "message": "Qloo API key is not configured on the backend.",
         }
 
     headers = {
@@ -188,11 +216,10 @@ def research_cultural_data(
 
     category_type = CATEGORY_TYPES[category]
     search_term = interests.split(",")[0].strip()
+    tag_id = None
 
     try:
-        # Step 1: Try a genre tag for movie genre requests.
-        tag_id = None
-
+        # Step 1: Try the genre tag for supported movie genres.
         if (
             category == "Movies"
             and search_term.casefold() in GENRE_HINTS
@@ -203,168 +230,58 @@ def research_cultural_data(
                 category_type,
             )
 
-        # Step 2: Build the Insights request.
+        results = []
+
+        # Step 2: Try Insights with the genre tag.
         if tag_id:
-            insights_params = {
-                "filter.type": category_type,
-                "filter.tags": tag_id,
-                "take": 10,
-            }
-        else:
-            # Search for a named entity, such as Interstellar.
-            stage = "search"
+            try:
+                results = _get_insights(
+                    headers,
+                    {
+                        "filter.type": category_type,
+                        "filter.tags": tag_id,
+                        "take": 10,
+                    },
+                )
+            except requests.RequestException as exc:
+                print("QLOO TAG INSIGHTS ERROR:", str(exc))
 
-            search_response = requests.get(
-                f"{QLOO_BASE_URL}/search",
-                headers=headers,
-                params={
-                    "query": search_term,
-                    "types": category_type,
-                    "take": 5,
-                },
-                timeout=TIMEOUT,
+        # Step 3: Fallback to a named entity if tag results are empty.
+        if not results:
+            print("QLOO: Trying entity-based fallback.")
+
+            entity_id = _search_entity(
+                headers,
+                search_term,
+                category_type,
             )
 
-            search_response.raise_for_status()
-            search_data = search_response.json()
-
-            entities = search_data.get("results", [])
-
-            if isinstance(entities, dict):
-                entities = entities.get("entities", [])
-
-            entity_id = None
-
-            if isinstance(entities, list):
-                for entity in entities:
-                    if not isinstance(entity, dict):
-                        continue
-
-                    entity_id = (
-                        entity.get("entity_id")
-                        or entity.get("id")
-                    )
-
-                    if entity_id:
-                        break
-
-            if not entity_id:
-                return {
-                    "agent": "researcher",
-                    "status": "no_matching_entity",
-                    "interests": interests,
-                    "category": category,
-                    "source": "Qloo",
-                    "results": [],
-                    "message": (
-                        "No matching Qloo entity was found. "
-                        "Try a specific title, artist, or place."
-                    ),
-                }
-
-            insights_params = {
-                "filter.type": category_type,
-                "signal.interests.entities": entity_id,
-                "take": 10,
-            }
-
-        # Step 3: Request recommendations.
-        print("QLOO INSIGHTS PARAMS:", insights_params)
-
-        stage = "insights"
-
-        insights_response = requests.get(
-            f"{QLOO_BASE_URL}/v2/insights",
-            headers=headers,
-            params=insights_params,
-            timeout=TIMEOUT,
-        )
-
-        insights_response.raise_for_status()
-        insights_data = insights_response.json()
-        results = _extract_entities(insights_data)
-        
-        # Fallback: if the genre tag returns no results,
-        # try Qloo entity-based Insights instead.
-        if tag_id and not results:
-            print("QLOO TAG RETURNED 0 RESULTS; TRYING ENTITY FALLBACK")
-
-            fallback_search = requests.get(
-                f"{QLOO_BASE_URL}/search",
-                headers=headers,
-                params={
-                    "query": search_term,
-                    "types": category_type,
-                    "take": 5,
-                },
-                timeout=TIMEOUT,
-            )
-            fallback_search.raise_for_status()
-            fallback_data = fallback_search.json()
-            fallback_entities = fallback_data.get("results", [])
-
-            if isinstance(fallback_entities, dict):
-                fallback_entities = fallback_entities.get(
-                    "entities", []
+            if entity_id:
+                results = _get_insights(
+                    headers,
+                    {
+                        "filter.type": category_type,
+                        "signal.interests.entities": entity_id,
+                        "take": 10,
+                    },
                 )
 
-            fallback_entity_id = None
-
-            if isinstance(fallback_entities, list):
-                for entity in fallback_entities:
-                    if isinstance(entity, dict):
-                        fallback_entity_id = (
-                            entity.get("entity_id")
-                            or entity.get("id")
-                        )
-                        if fallback_entity_id:
-                            break
-
-            if fallback_entity_id:
-                fallback_params = {
-                    "filter.type": category_type,
-                    "signal.interests.entities": fallback_entity_id,
-                    "take": 10,
-                }
-
-                print("QLOO FALLBACK INSIGHTS PARAMS:", fallback_params)
-
-                fallback_response = requests.get(
-                    f"{QLOO_BASE_URL}/v2/insights",
-                    headers=headers,
-                    params=fallback_params,
-                    timeout=TIMEOUT,
-                )
-                fallback_response.raise_for_status()
-
-                fallback_insights = fallback_response.json()
-                fallback_results = _extract_entities(
-                    fallback_insights
-                )
-
-                print(
-                    "QLOO FALLBACK RESULT COUNT:",
-                    len(fallback_results),
-                )
-
-                if fallback_results:
-                    results = fallback_results
-
-
-        print(
-            "QLOO INSIGHTS RESULT COUNT:",
-            len(results),
-        )
+        status = "success" if results else "no_results"
 
         return {
             "agent": "researcher",
-            "status": "success",
+            "status": status,
             "interests": interests,
             "category": category,
             "source": "Qloo",
             "results": results,
             "message": (
                 f"Retrieved {len(results)} results from Qloo."
+                if results
+                else (
+                    "Qloo returned no usable recommendations. "
+                    "Try a specific movie title, artist, or place."
+                )
             ),
         }
 
@@ -373,24 +290,12 @@ def research_cultural_data(
 
         if response is not None:
             print(
-                f"QLOO {stage if 'stage' in locals() else 'request'} "
-                f"FAILED: HTTP {response.status_code}; "
-                f"{(response.text or '')[:800]}"
-            )
-            message = (
-                "Qloo API request failed. "
-                "Check the Render logs for details."
+                "QLOO API ERROR:",
+                response.status_code,
+                response.text[:1200],
             )
         else:
-            print(
-                "QLOO CONNECTION ERROR:",
-                type(exc).__name__,
-                str(exc),
-            )
-            message = (
-                "Could not connect to Qloo. "
-                "Check the backend logs and try again."
-            )
+            print("QLOO CONNECTION ERROR:", str(exc))
 
         return {
             "agent": "researcher",
@@ -399,15 +304,11 @@ def research_cultural_data(
             "category": category,
             "source": "Qloo",
             "results": [],
-            "message": message,
+            "message": "Qloo API request failed. Check Render logs.",
         }
 
     except (ValueError, TypeError, AttributeError) as exc:
-        print(
-            "QLOO RESPONSE ERROR:",
-            type(exc).__name__,
-            str(exc),
-        )
+        print("QLOO RESPONSE ERROR:", type(exc).__name__, str(exc))
 
         return {
             "agent": "researcher",
@@ -416,11 +317,9 @@ def research_cultural_data(
             "category": category,
             "source": "Qloo",
             "results": [],
-            "message": (
-                "Qloo returned an unexpected response. "
-                "Check the Render logs."
-            ),
+            "message": "Qloo returned an unexpected response.",
         }
+
 
 
 
