@@ -12,10 +12,9 @@ from researcher import research_cultural_data
 
 app = FastAPI(
     title="CulturePilot AI Agent",
-    description="Agentic AI for personalized cultural discovery.",
-    version="1.0.0",
+    description="Qloo-powered cultural discovery agent.",
+    version="1.1.0",
 )
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,7 +31,32 @@ app.add_middleware(
 
 class PlanRequest(BaseModel):
     interests: str = Field(min_length=1, max_length=250)
-    category: str = Field(min_length=1, max_length=30)
+    category: str | None = Field(default=None, max_length=30)
+
+
+def normalise_category(category):
+    if not category:
+        return None
+
+    value = category.strip().casefold()
+
+    categories = {
+        "movies": "Movies",
+        "movie": "Movies",
+        "film": "Movies",
+        "films": "Movies",
+        "music": "Music",
+        "artist": "Music",
+        "artists": "Music",
+        "food": "Food",
+        "restaurant": "Food",
+        "restaurants": "Food",
+        "travel": "Travel",
+        "destination": "Travel",
+        "destinations": "Travel",
+    }
+
+    return categories.get(value)
 
 
 @app.get("/")
@@ -48,76 +72,127 @@ def home():
 def health():
     return {"status": "healthy"}
 
+
 @app.get("/agent/status")
 def agent_status():
     return {
-"planner": "implemented",
-"researcher": "implemented",
-"recommender": "implemented_scaffold",
-"reviewer": "implemented",
-"executor": "implemented",
-"qloo_connected": "check_via_recommend_endpoint",
-"workflow": "planner_researcher_recommender_reviewer_executor"
-}
-
-
-
-
-    
-
-
-
-
-
-
+        "planner": "implemented",
+        "researcher": "implemented",
+        "recommender": "implemented_scaffold",
+        "reviewer": "implemented",
+        "executor": "implemented",
+        "qloo_connected": "check_via_recommend_endpoint",
+        "workflow": (
+            "planner_researcher_recommender_reviewer_executor"
+        ),
+        "generic_input": True,
+        "supported_qloo_categories": [
+            "Movies",
+            "Music",
+            "Food",
+            "Travel",
+        ],
+    }
 
 
 @app.post("/agent/plan")
 def generate_plan(request: PlanRequest):
+    category = normalise_category(request.category)
+
+    if not category:
+        return {
+            "interests": request.interests.strip(),
+            "category": request.category,
+            "status": "needs_category",
+            "message": (
+                "Choose a supported cultural category: "
+                "Movies, Music, Food, or Travel."
+            ),
+            "qloo_required": True,
+            "qloo_connected": False,
+        }
+
     try:
         return create_plan(
-            interests=request.interests,
-            category=request.category,
+            interests=request.interests.strip(),
+            category=category,
         )
     except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        )
+        raise HTTPException(status_code=400, detail=str(error))
 
 
 @app.post("/agent/recommend")
 def generate_recommendation(request: PlanRequest):
+    interests = request.interests.strip()
+    category = normalise_category(request.category)
+
+    # Accept any query, but do not invent a Qloo entity type.
+    if not category:
+        return {
+            "plan": {
+                "interests": interests,
+                "category": request.category,
+                "status": "needs_category",
+                "qloo_connected": False,
+            },
+            "research": {
+                "agent": "researcher",
+                "status": "unsupported_or_unspecified_category",
+                "interests": interests,
+                "results": [],
+                "source": "Qloo",
+                "message": (
+                    "Your query was received, but this version "
+                    "needs a supported cultural category to search "
+                    "Qloo. Try Movies, Music, Food, or Travel. "
+                    "Other topics may require a different data source."
+                ),
+            },
+            "recommendation": {
+                "recommendation_status": "pending_data",
+                "recommendations": [],
+                "message": "No recommendations were generated.",
+            },
+            "review": {
+                "approved": False,
+                "review_status": "pending_data",
+                "reason": "No research results were available.",
+                "recommendations": [],
+            },
+            "final_result": {
+                "status": "pending",
+                "message": (
+                    "No recommendations available. "
+                    "Please choose a supported category."
+                ),
+                "recommendations": [],
+            },
+            "status": "workflow_completed",
+        }
+
     try:
         # Agent 1: Planner
         plan_result = create_plan(
-            interests=request.interests,
-            category=request.category,
+            interests=interests,
+            category=category,
         )
 
         # Agent 2: Researcher
         research_result = research_cultural_data(
-            interests=request.interests,
-            category=request.category,
+            interests=interests,
+            category=category,
         )
 
         # Agent 3: Recommender
-        
         recommendation_result = create_recommendation_request(
-            interests=request.interests,
-            category=request.category,
+            interests=interests,
+            category=category,
             plan=plan_result["plan"],
             cultural_data=research_result.get("results", []),
-)
+        )
 
-            
-            
-            
-        
-
-        # Attach the research status for transparency
         recommendation_result["research_status"] = (
-            research_result["status"]
+            research_result.get("status", "unknown")
         )
 
         # Agent 4: Reviewer
@@ -126,15 +201,12 @@ def generate_recommendation(request: PlanRequest):
         )
 
         # Agent 5: Executor
-        final_result = execute_recommendation(
-            review_result
-        )
-        
-        plan_result["qloo_connected"] = (
-        research_result.get("status") == "success"
-        and research_result.get("source") == "Qloo"
-)
+        final_result = execute_recommendation(review_result)
 
+        plan_result["qloo_connected"] = (
+            research_result.get("status") == "success"
+            and research_result.get("source") == "Qloo"
+        )
 
         return {
             "plan": plan_result,
@@ -146,10 +218,8 @@ def generate_recommendation(request: PlanRequest):
         }
 
     except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        )
+        raise HTTPException(status_code=400, detail=str(error))
+
 
 
 
