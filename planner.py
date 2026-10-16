@@ -1,138 +1,230 @@
-CATEGORY_KEYWORDS = {
-    "Movies": [
-        "movie", "movies", "film", "films", "cinema",
-        "science fiction", "sci-fi", "sci fi", "thriller",
-        "comedy", "horror", "drama", "animation",
-        "interstellar", "artificial intelligence movie",
-    ],
-    "Music": [
-        "music", "song", "songs", "singer", "artist",
-        "indie pop", "indie rock", "jazz", "hip hop",
-        "hip-hop", "rock music", "classical music",
-    ],
-    "Food": [
-        "food", "cuisine", "restaurant", "restaurants",
-        "street food", "indian food", "italian food",
-        "japanese food", "vegan food",
-    ],
-    "Travel": [
-        "travel", "destination", "destinations",
-        "mountain", "mountains", "beach", "beaches",
-        "historical places", "adventure travel",
-        "nature destinations",
-    ],
-}
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from planner import create_plan, detect_category
+from recommender import create_recommendation_request
+from reviewer import review_recommendations
+from executor import execute_recommendation
+from researcher import research_cultural_data
 
 
-def detect_category(interests: str) -> str | None:
-    """Detect a supported cultural category from a user's query."""
-    query = interests.strip().casefold()
+app = FastAPI(
+    title="CulturePilot AI Agent",
+    description="Qloo-powered cultural discovery agent.",
+    version="1.2.0",
+)
 
-    if not query:
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://culturepilot-ai.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+
+class PlanRequest(BaseModel):
+    interests: str = Field(min_length=1, max_length=250)
+    category: str | None = Field(default=None, max_length=30)
+
+
+def normalise_category(category):
+    if not category:
         return None
 
-    matches = []
+    aliases = {
+        "movies": "Movies",
+        "movie": "Movies",
+        "film": "Movies",
+        "films": "Movies",
+        "music": "Music",
+        "artist": "Music",
+        "artists": "Music",
+        "food": "Food",
+        "restaurant": "Food",
+        "restaurants": "Food",
+        "travel": "Travel",
+        "destination": "Travel",
+        "destinations": "Travel",
+        "auto": None,
+        "automatic": None,
+        "all": None,
+        "all experiences": None,
+    }
 
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in query:
-                matches.append((len(keyword), category))
-
-    if not matches:
-        return None
-
-    # Prefer the most specific matching phrase.
-    matches.sort(reverse=True)
-    return matches[0][1]
+    return aliases.get(category.strip().casefold())
 
 
-def create_plan(
-    interests: str,
-    category: str | None = None,
-) -> dict:
-    """Create a five-agent plan with optional automatic category detection."""
+@app.get("/")
+def home():
+    return {
+        "project": "CulturePilot AI",
+        "status": "online",
+        "message": "CulturePilot AI Agent backend is ready.",
+    }
 
-    interests = interests.strip()
 
-    if not interests:
-        raise ValueError("Please provide your interests.")
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
-    if category and category.strip().casefold() not in {
-        "auto", "automatic", "all experiences", "all"
-    }:
-        normalised = category.strip().casefold()
 
-        aliases = {
-            "movie": "Movies",
-            "movies": "Movies",
-            "film": "Movies",
-            "films": "Movies",
-            "music": "Music",
-            "food": "Food",
-            "travel": "Travel",
-        }
+@app.get("/agent/status")
+def agent_status():
+    return {
+        "planner": "implemented",
+        "researcher": "implemented",
+        "recommender": "implemented_scaffold",
+        "reviewer": "implemented",
+        "executor": "implemented",
+        "generic_input": True,
+        "automatic_category_detection": True,
+        "supported_qloo_categories": [
+            "Movies",
+            "Music",
+            "Food",
+            "Travel",
+        ],
+        "workflow": (
+            "planner_researcher_recommender_reviewer_executor"
+        ),
+    }
 
-        category = aliases.get(normalised)
 
-        if category is None:
-            raise ValueError(
-                "Choose Movies, Music, Food, Travel, or Auto."
-            )
-    else:
-        category = None
+@app.post("/agent/plan")
+def generate_plan(request: PlanRequest):
+    interests = request.interests.strip()
+    category = normalise_category(request.category)
 
-    # Detect a category if none was explicitly selected.
-    if category is None:
+    if not category:
         category = detect_category(interests)
 
-    steps = [
-        {
-            "step": 1,
-            "agent": "planner",
-            "task": "Understand the user's interests and detect a supported category.",
-        },
-        {
-            "step": 2,
-            "agent": "researcher",
-            "task": "Retrieve relevant cultural data from Qloo when available.",
-        },
-        {
-            "step": 3,
-            "agent": "recommender",
-            "task": "Select recommendations relevant to the user's interests.",
-        },
-        {
-            "step": 4,
-            "agent": "reviewer",
-            "task": "Check recommendation relevance and available data.",
-        },
-        {
-            "step": 5,
-            "agent": "executor",
-            "task": "Return reviewed results or a clear no-results message.",
-        },
-    ]
-
-    if category is None:
+    if not category:
         return {
             "interests": interests,
             "category": None,
-            "plan": steps,
             "status": "unsupported_or_unclear_category",
             "message": (
                 "We couldn't identify a supported cultural category. "
                 "Try Movies, Music, Food, or Travel."
             ),
-            "qloo_required": True,
-            "qloo_connected": False,
+            "plan": [],
         }
 
-    return {
-        "interests": interests,
-        "category": category,
-        "plan": steps,
-        "status": "plan_created",
-        "category_detection": "automatic" if not category else "supported",
-        "qloo_required": True,
-        "qloo_connected": False,
-    }
+    try:
+        return create_plan(
+            interests=interests,
+            category=category,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/agent/recommend")
+def generate_recommendation(request: PlanRequest):
+    interests = request.interests.strip()
+    category = normalise_category(request.category)
+
+    # Automatically detect the category if it wasn't selected.
+    if not category:
+        category = detect_category(interests)
+
+    # Do not send unsupported topics to Qloo or invent results.
+    if not category:
+        message = (
+            "We couldn't identify a supported cultural category for "
+            "this query. Try Movies, Music, Food, or Travel."
+        )
+
+        return {
+            "plan": {
+                "interests": interests,
+                "category": None,
+                "status": "unsupported_or_unclear_category",
+                "qloo_connected": False,
+            },
+            "research": {
+                "agent": "researcher",
+                "status": "unsupported_category",
+                "interests": interests,
+                "category": None,
+                "source": "Qloo",
+                "results": [],
+                "message": message,
+            },
+            "recommendation": {
+                "interests": interests,
+                "category": None,
+                "recommendation_status": "no_results",
+                "recommendations": [],
+                "message": message,
+            },
+            "review": {
+                "approved": False,
+                "review_status": "pending_data",
+                "reason": message,
+                "recommendations": [],
+            },
+            "final_result": {
+                "status": "pending",
+                "message": message,
+                "recommendations": [],
+            },
+            "status": "workflow_completed",
+        }
+
+    try:
+        # Agent 1: Planner
+        plan_result = create_plan(
+            interests=interests,
+            category=category,
+        )
+
+        # Agent 2: Researcher
+        research_result = research_cultural_data(
+            interests=interests,
+            category=category,
+        )
+
+        # Agent 3: Recommender
+        recommendation_result = create_recommendation_request(
+            interests=interests,
+            category=category,
+            plan=plan_result["plan"],
+            cultural_data=research_result.get("results", []),
+        )
+
+        recommendation_result["research_status"] = (
+            research_result.get("status", "unknown")
+        )
+
+        # Agent 4: Reviewer
+        review_result = review_recommendations(
+            recommendation_result
+        )
+
+        # Agent 5: Executor
+        final_result = execute_recommendation(review_result)
+
+        plan_result["qloo_connected"] = (
+            research_result.get("status") == "success"
+            and research_result.get("source") == "Qloo"
+        )
+
+        return {
+            "plan": plan_result,
+            "research": research_result,
+            "recommendation": recommendation_result,
+            "review": review_result,
+            "final_result": final_result,
+            "status": "workflow_completed",
+        }
+
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
