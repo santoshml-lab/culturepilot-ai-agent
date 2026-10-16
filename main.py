@@ -134,7 +134,7 @@ def generate_recommendation(request: PlanRequest):
     interests = request.interests.strip()
     category = normalise_category(request.category)
     if not category:
-    category = detect_category(interests)
+        category = detect_category(interests)
 
     # Accept any query, but do not invent a Qloo entity type.
     if not category:
