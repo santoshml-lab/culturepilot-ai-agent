@@ -765,7 +765,7 @@ def select_diverse_recommendations(
 
         selected.append(best_item)
         seen_ids.add(str(best_item.get("id", "")))
-        seen_titles.append(best_item.get("title", ""))
+        seen_titles.add(best_item.get("title", ""))
 
         if category == "Food":
             group = best_item.get("diversity_group", "general")
