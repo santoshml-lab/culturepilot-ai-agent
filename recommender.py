@@ -1,4 +1,3 @@
-
 import re
 from difflib import SequenceMatcher
 from typing import Any
@@ -93,6 +92,125 @@ INTEREST_SYNONYMS = {
         "cultural heritage", "heritage sites", "historical sites",
         "historic landmarks", "cultural landmarks",
         "history and culture",
+    ],
+}
+
+# Known franchises are used only to improve diversity.
+# They do not determine whether a recommendation is relevant.
+MOVIE_FRANCHISES = {
+    "star trek": [
+        "star trek",
+    ],
+    "star wars": [
+        "star wars",
+    ],
+    "marvel": [
+        "marvel cinematic universe",
+        "marvel studios",
+        "avengers",
+        "iron man",
+        "captain america",
+        "thor",
+        "guardians of the galaxy",
+        "ant man",
+        "doctor strange",
+        "black panther",
+        "spider man",
+        "spider-man",
+    ],
+    "dc": [
+        "dc comics",
+        "dc extended universe",
+        "batman",
+        "superman",
+        "wonder woman",
+        "aquaman",
+        "justice league",
+    ],
+    "jurassic": [
+        "jurassic park",
+        "jurassic world",
+    ],
+    "planet of the apes": [
+        "planet of the apes",
+    ],
+    "alien": [
+        "alien",
+        "aliens",
+    ],
+    "predator": [
+        "predator",
+    ],
+    "terminator": [
+        "terminator",
+    ],
+    "the matrix": [
+        "the matrix",
+    ],
+    "avatar": [
+        "avatar",
+    ],
+    "transformers": [
+        "transformers",
+    ],
+    "men in black": [
+        "men in black",
+    ],
+    "back to the future": [
+        "back to the future",
+    ],
+    "ghostbusters": [
+        "ghostbusters",
+    ],
+    "mad max": [
+        "mad max",
+    ],
+    "blade runner": [
+        "blade runner",
+    ],
+    "dune": [
+        "dune",
+    ],
+    "the hunger games": [
+        "the hunger games",
+    ],
+    "divergent": [
+        "divergent",
+    ],
+    "maze runner": [
+        "maze runner",
+    ],
+    "resident evil": [
+        "resident evil",
+    ],
+    "robocop": [
+        "robocop",
+    ],
+    "x-men": [
+        "x men",
+        "x-men",
+    ],
+    "mission impossible": [
+        "mission impossible",
+    ],
+    "fast and furious": [
+        "fast and furious",
+        "fast furious",
+    ],
+    "godzilla": [
+        "godzilla",
+    ],
+    "king kong": [
+        "king kong",
+    ],
+    "toy story": [
+        "toy story",
+    ],
+    "shrek": [
+        "shrek",
+    ],
+    "how to train your dragon": [
+        "how to train your dragon",
     ],
 }
 
@@ -578,7 +696,6 @@ def get_food_group(recommendation: dict) -> str:
         " ".join(recommendation.get("genres", [])),
     ]))
 
-    # Specific groups first to reduce ambiguous classification.
     priority = [
         "pani_puri", "chaat", "rolls", "south_indian",
         "indo_chinese", "sweets", "grilled", "beverages",
@@ -594,11 +711,87 @@ def get_food_group(recommendation: dict) -> str:
     return "general"
 
 
+def get_movie_franchise(recommendation: dict) -> str:
+    """
+    Identify a known franchise from the available movie title
+    and description. Unknown movies are not forced into a franchise.
+    """
+    searchable = normalize(" ".join([
+        recommendation.get("title", ""),
+        recommendation.get("description", ""),
+    ]))
+
+    for franchise, aliases in MOVIE_FRANCHISES.items():
+        for alias in aliases:
+            if phrase_in_text(alias, searchable):
+                return franchise
+
+    return "standalone"
+
+
+def get_movie_diversity_group(recommendation: dict) -> str:
+    """
+    Estimate a broad movie style using available genres and text.
+    This is a diversity hint, not a definitive classification.
+    """
+    searchable = normalize(" ".join([
+        recommendation.get("title", ""),
+        recommendation.get("description", ""),
+        " ".join(recommendation.get("genres", [])),
+    ]))
+
+    genre_groups = {
+        "space_science_fiction": [
+            "space opera", "space adventure", "space exploration",
+            "outer space", "space travel", "interstellar",
+            "starship", "alien planet",
+        ],
+        "cyberpunk": [
+            "cyberpunk", "dystopian technology",
+            "virtual reality", "artificial intelligence",
+            "cybernetic",
+        ],
+        "dystopian": [
+            "dystopian", "post apocalyptic",
+            "post-apocalyptic", "totalitarian",
+        ],
+        "time_travel": [
+            "time travel", "time loop", "time machine",
+            "alternate timeline",
+        ],
+        "first_contact": [
+            "first contact", "alien contact",
+            "extraterrestrial communication",
+        ],
+        "thriller_horror": [
+            "science fiction horror", "sci fi horror",
+            "psychological horror", "horror thriller",
+        ],
+        "comedy": [
+            "science fiction comedy", "sci fi comedy",
+            "science fiction satire", "parody",
+        ],
+        "action_adventure": [
+            "science fiction action", "sci fi action",
+            "action adventure", "space battle",
+        ],
+        "drama": [
+            "science fiction drama", "sci fi drama",
+            "character drama",
+        ],
+    }
+
+    for group, terms in genre_groups.items():
+        if any(phrase_in_text(term, searchable) for term in terms):
+            return group
+
+    return "general"
+
+
 def get_dedup_text(recommendation: dict) -> str:
     """Normalize a title for duplicate detection."""
     title = normalize(recommendation.get("title", ""))
 
-    # Remove common business suffixes that rarely distinguish places.
     title = re.sub(
         r"\b(restaurant|restaurants|cafe|cafes|official|india)\b",
         " ",
@@ -634,11 +827,10 @@ def are_similar_titles(first: str, second: str) -> bool:
 
     ratio = SequenceMatcher(None, first, second).ratio()
 
-    # Avoid aggressively collapsing short, common names.
     if min(len(first), len(second)) < 8:
         return overlap >= 0.8 and ratio >= 0.9
 
-    return overlap >= 0.8 or ratio >= 0.90
+    return overlap >= 0.8 or ratio >= 0.9
 
 
 def score_recommendation(
@@ -700,6 +892,14 @@ def score_recommendation(
             recommendation
         )
 
+    if category == "Movies":
+        recommendation["movie_franchise"] = get_movie_franchise(
+            recommendation
+        )
+        recommendation["movie_diversity_group"] = (
+            get_movie_diversity_group(recommendation)
+        )
+
     return recommendation
 
 
@@ -709,10 +909,14 @@ def select_diverse_recommendations(
     limit: int = RESULT_LIMIT,
 ) -> list[dict]:
     """
-    Greedy relevance-first selection with duplicate control and
-    a soft penalty for repeated food groups.
+    Greedy relevance-first selection with duplicate control.
 
-    Relevance is preserved: diversity never adds an unrelated entity.
+    Food: apply a soft penalty to repeated food groups.
+    Movies: apply soft penalties to repeated franchises and styles.
+
+    Diversity is a ranking hint. It never makes an unrelated entity
+    eligible, and the function can return fewer than limit results
+    when too few distinct candidates are available.
     """
     if not candidates or limit <= 0:
         return []
@@ -726,7 +930,10 @@ def select_diverse_recommendations(
     selected = []
     seen_ids = set()
     seen_titles = set()
-    group_counts = {}
+
+    food_group_counts = {}
+    franchise_counts = {}
+    movie_style_counts = {}
 
     while remaining and len(selected) < limit:
         best_item = None
@@ -739,7 +946,6 @@ def select_diverse_recommendations(
             if item_id in seen_ids:
                 continue
 
-            # Reject near-duplicate display names.
             if any(
                 are_similar_titles(title, previous_title)
                 for previous_title in seen_titles
@@ -751,10 +957,33 @@ def select_diverse_recommendations(
 
             if category == "Food":
                 group = item.get("diversity_group", "general")
-                repeat_count = group_counts.get(group, 0)
+                repeat_count = food_group_counts.get(group, 0)
 
-                # Soft penalty: a strong relevant result can still win.
+                # Prefer other food groups when their relevance is close.
                 adjusted_score -= min(repeat_count * 18, 36)
+
+            elif category == "Movies":
+                franchise = item.get(
+                    "movie_franchise", "standalone"
+                )
+                style = item.get(
+                    "movie_diversity_group", "general"
+                )
+
+                # Standalone films are not treated as one shared franchise.
+                if franchise != "standalone":
+                    franchise_repeat_count = franchise_counts.get(
+                        franchise, 0
+                    )
+                    adjusted_score -= min(
+                        franchise_repeat_count * 24, 48
+                    )
+
+                style_repeat_count = movie_style_counts.get(style, 0)
+                if style != "general":
+                    adjusted_score -= min(
+                        style_repeat_count * 8, 16
+                    )
 
             if adjusted_score > best_adjusted_score:
                 best_item = item
@@ -764,16 +993,40 @@ def select_diverse_recommendations(
             break
 
         selected.append(best_item)
-        seen_ids.add(str(best_item.get("id", "")))
-        seen_titles.add(best_item.get("title", ""))
+
+        selected_id = str(best_item.get("id", ""))
+        selected_title = best_item.get("title", "")
+
+        seen_ids.add(selected_id)
+        seen_titles.add(selected_title)
 
         if category == "Food":
             group = best_item.get("diversity_group", "general")
-            group_counts[group] = group_counts.get(group, 0) + 1
+            food_group_counts[group] = (
+                food_group_counts.get(group, 0) + 1
+            )
+
+        elif category == "Movies":
+            franchise = best_item.get(
+                "movie_franchise", "standalone"
+            )
+            style = best_item.get(
+                "movie_diversity_group", "general"
+            )
+
+            if franchise != "standalone":
+                franchise_counts[franchise] = (
+                    franchise_counts.get(franchise, 0) + 1
+                )
+
+            if style != "general":
+                movie_style_counts[style] = (
+                    movie_style_counts.get(style, 0) + 1
+                )
 
         remaining = [
             item for item in remaining
-            if str(item.get("id", "")) != str(best_item.get("id", ""))
+            if str(item.get("id", "")) != selected_id
         ]
 
     return selected
@@ -872,6 +1125,12 @@ def create_recommendation_request(
                 "food_group": (
                     recommendation or {}
                 ).get("diversity_group"),
+                "movie_franchise": (
+                    recommendation or {}
+                ).get("movie_franchise"),
+                "movie_style": (
+                    recommendation or {}
+                ).get("movie_diversity_group"),
                 "has_description": bool(
                     metadata.get("description")
                 ),
@@ -922,7 +1181,7 @@ def create_recommendation_request(
             "Try a more specific or alternative search phrase."
         ),
         "source": "Qloo",
-    }
+            }
 
 
 
