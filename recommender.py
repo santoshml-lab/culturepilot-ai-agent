@@ -653,7 +653,7 @@ def category_confirmed(category: str, metadata: dict) -> bool:
         if "artist" in entity_type or "music" in entity_type:
             return True
 
-  c if category_name == "Travel":
+    if category_name == "Travel":
         travel_types = (
             "destination",
             "place",
