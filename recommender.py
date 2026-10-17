@@ -49,6 +49,7 @@ STOP_WORDS = {
 }
 
 # Specific phrase alternatives help with common cuisine queries.
+
 INTEREST_SYNONYMS = {
     "indian street food": [
         "indian street food",
@@ -78,7 +79,26 @@ INTEREST_SYNONYMS = {
         "science fiction",
         "science-fiction",
     ],
+    "indian classical": [
+        "indian classical",
+        "indian classical music",
+        "hindustani classical",
+        "carnatic music",
+        "indian raga",
+        "raga",
+    ],
+    "relaxing music": [
+        "relaxing music",
+        "relaxation music",
+        "calm music",
+        "soothing music",
+        "ambient music",
+        "meditative music",
+        "instrumental music",
+    ],
 }
+
+ 
 
 
 def normalize(value: Any) -> str:
