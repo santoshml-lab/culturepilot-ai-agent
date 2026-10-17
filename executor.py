@@ -1,27 +1,61 @@
 
 def execute_recommendation(review_result: dict) -> dict:
-    """
-    Prepare the final user-facing response
-    from the reviewer's result.
-    """
+    """Build the final response from the reviewer's decision."""
 
-    recommendations = review_result.get(
-        "recommendations", []
-    )
-
-    if review_result.get("approved") and recommendations:
+    if not isinstance(review_result, dict):
         return {
-            "status": "success",
-            "message": "Your cultural recommendations are ready.",
-            "recommendations": recommendations,
+            "status": "error",
+            "message": "The review agent returned an invalid response.",
+            "recommendations": [],
+            "total": 0,
+        }
+
+    recommendations = review_result.get("recommendations", [])
+
+    if not isinstance(recommendations, list):
+        recommendations = []
+
+    if not review_result.get("approved") or not recommendations:
+        return {
+            "status": "pending",
+            "message": (
+                "No recommendations passed review. "
+                "Please try another interest or check the Qloo response."
+            ),
+            "recommendations": [],
+            "total": 0,
+            "review_status": review_result.get(
+                "review_status", "pending_data"
+            ),
+        }
+
+    # Keep only dictionary items with a usable title.
+    final_recommendations = [
+        item
+        for item in recommendations
+        if isinstance(item, dict)
+        and str(item.get("title") or "").strip()
+    ]
+
+    if not final_recommendations:
+        return {
+            "status": "pending",
+            "message": "No displayable recommendations remain after validation.",
+            "recommendations": [],
+            "total": 0,
         }
 
     return {
-        "status": "pending",
+        "status": "success",
         "message": (
-            "Your request has been processed, but personalized "
-            "recommendations are not available yet. "
-            "Connect Qloo to retrieve cultural data."
+            f"Ready! Qloo-powered discovery returned "
+            f"{len(final_recommendations)} recommendations."
         ),
-        "recommendations": [],
+        "recommendations": final_recommendations,
+        "total": len(final_recommendations),
+        "source": "Qloo",
+        "review_status": review_result.get(
+            "review_status", "approved"
+        ),
     }
+
