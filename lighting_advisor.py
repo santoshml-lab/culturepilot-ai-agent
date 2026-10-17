@@ -6,6 +6,7 @@ import re
 import requests
 
 
+
 CULTURAL_SEEDS = {
     "Music": [
         "indie rock", "indie pop", "classical music",
