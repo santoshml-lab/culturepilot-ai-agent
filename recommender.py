@@ -557,6 +557,7 @@ def get_entity_metadata(entity: dict) -> dict:
 def match_interests(
     interests: Any,
     metadata: dict,
+    category: str = "",
 ) -> tuple[list[str], int, list[str]]:
     """Match user interests against available entity information."""
     title = normalize(metadata.get("title", ""))
@@ -564,10 +565,35 @@ def match_interests(
     genres = normalize(" ".join(metadata.get("genres", [])))
     other_metadata = normalize(metadata.get("metadata", ""))
     all_text = normalize(metadata.get("all_text", ""))
+    category_name = normalize(category)
 
     matched_interests = []
     matched_phrases = []
     score = 0
+
+    travel_interest_terms = {
+        "japan": [
+            "japan", "japanese", "tokyo", "kyoto", "osaka",
+            "mount fuji",
+        ],
+        "nature and adventure": [
+            "nature", "adventure", "national park", "mountain",
+            "hiking", "wildlife", "forest", "waterfall",
+            "landscape", "outdoor",
+        ],
+        "nature": [
+            "nature", "national park", "mountain", "wildlife",
+            "forest", "waterfall", "landscape",
+        ],
+        "adventure": [
+            "adventure", "hiking", "trekking", "outdoor",
+            "mountain", "wildlife",
+        ],
+        "cultural heritage": [
+            "cultural heritage", "heritage", "historic",
+            "historical", "landmark", "temple", "museum",
+        ],
+    }
 
     for interest in split_interests(interests):
         alternatives = expand_interest(interest)
@@ -587,20 +613,21 @@ def match_interests(
 
         if title_match:
             score += 95
+
         elif genre_match:
             score += 90
+
         elif description_match:
             score += 75
+
         elif metadata_match:
             score += 70
+
         else:
             meaningful_words = [
                 word for word in interest.split()
                 if len(word) >= 4 and word not in STOP_WORDS
             ]
-
-            if not meaningful_words:
-                continue
 
             matched_words = [
                 word for word in meaningful_words
@@ -611,11 +638,31 @@ def match_interests(
                 1 if len(meaningful_words) == 1 else 2
             )
 
-            if len(matched_words) < required_matches:
-                continue
+            if (
+                meaningful_words
+                and len(matched_words) >= required_matches
+            ):
+                score += 55
+                matched_phrases.extend(matched_words)
 
-            score += 55
-            matched_phrases.extend(matched_words)
+            elif category_name == "travel":
+                travel_terms = travel_interest_terms.get(
+                    interest, []
+                )
+
+                matched_travel_terms = [
+                    term for term in travel_terms
+                    if phrase_in_text(term, all_text)
+                ]
+
+                if not matched_travel_terms:
+                    continue
+
+                score += 65
+                matched_phrases.extend(matched_travel_terms)
+
+            else:
+                continue
 
         matched_interests.append(interest)
         matched_phrases.append(interest)
@@ -625,6 +672,13 @@ def match_interests(
         score,
         list(dict.fromkeys(matched_phrases)),
     )
+
+
+
+
+    
+    
+    
 
 
 def category_confirmed(category: str, metadata: dict) -> bool:
