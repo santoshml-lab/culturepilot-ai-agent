@@ -1,5 +1,6 @@
 
 import re
+from difflib import SequenceMatcher
 from typing import Any
 
 
@@ -53,92 +54,111 @@ STOP_WORDS = {
 
 INTEREST_SYNONYMS = {
     "indian street food": [
-        "indian street food",
-        "street food",
-        "indian cuisine",
-        "indian food",
-        "street snacks",
+        "indian street food", "street food", "indian cuisine",
+        "indian food", "street snacks",
     ],
     "indian food": [
-        "indian food",
-        "indian cuisine",
-        "indian restaurant",
-        "indian dishes",
+        "indian food", "indian cuisine",
+        "indian restaurant", "indian dishes",
     ],
     "street food": [
-        "street food",
-        "street snacks",
-        "local snacks",
+        "street food", "street snacks", "local snacks",
     ],
     "science fiction": [
-        "science fiction",
-        "sci-fi",
-        "science-fiction",
+        "science fiction", "sci-fi", "science-fiction",
     ],
     "sci-fi": [
-        "sci-fi",
-        "science fiction",
-        "science-fiction",
+        "sci-fi", "science fiction", "science-fiction",
     ],
     "indian classical": [
-        "indian classical",
-        "indian classical music",
-        "hindustani classical",
-        "carnatic music",
-        "indian raga",
-        "raga",
+        "indian classical", "indian classical music",
+        "hindustani classical", "carnatic music",
+        "indian raga", "raga",
     ],
     "relaxing music": [
-        "relaxing music",
-        "relaxation music",
-        "calm music",
-        "soothing music",
-        "ambient music",
-        "meditative music",
-        "instrumental music",
+        "relaxing music", "relaxation music", "calm music",
+        "soothing music", "ambient music",
+        "meditative music", "instrumental music",
     ],
     "relaxing instrumental piano": [
-        "relaxing instrumental piano",
-        "instrumental piano",
-        "piano music",
-        "relaxing music",
-        "classical piano",
+        "relaxing instrumental piano", "instrumental piano",
+        "piano music", "relaxing music", "classical piano",
         "ambient piano",
     ],
     "space exploration": [
-        "space exploration",
-        "space adventure",
-        "outer space",
-        "space travel",
-        "space mission",
-        "interstellar",
+        "space exploration", "space adventure", "outer space",
+        "space travel", "space mission", "interstellar",
     ],
     "cultural heritage": [
-        "cultural heritage",
-        "heritage sites",
-        "historical sites",
-        "historic landmarks",
-        "cultural landmarks",
+        "cultural heritage", "heritage sites", "historical sites",
+        "historic landmarks", "cultural landmarks",
         "history and culture",
     ],
+}
+
+# These labels are used for ranking diversity, not as proof
+# that an entity actually offers a particular dish.
+FOOD_DIVERSITY_GROUPS = {
+    "chaat": [
+        "chaat", "aloo tikki", "papdi chaat",
+        "dahi puri", "sev puri", "bhel puri",
+    ],
+    "pani_puri": [
+        "pani puri", "pani poori", "golgappa",
+        "gol gappa", "puchka", "phuchka",
+    ],
+    "rolls": [
+        "kathi roll", "kati roll", "frankie",
+        "street roll", "wrap",
+    ],
+    "sandwiches": [
+        "sandwich", "vada pav", "dabeli",
+        "burger", "toast",
+    ],
+    "south_indian": [
+        "dosa", "idli", "uttapam", "vada",
+        "sambar", "south indian",
+    ],
+    "indo_chinese": [
+        "momos", "manchurian", "chow mein",
+        "noodles", "fried rice", "indo chinese",
+    ],
+    "sweets": [
+        "jalebi", "gulab jamun", "kulfi",
+        "rasgulla", "mithai", "dessert",
+        "sweet shop", "falooda",
+    ],
+    "grilled": [
+        "kebab", "kabab", "tikka", "tandoori",
+        "grilled", "seekh",
+    ],
+    "beverages": [
+        "chai", "tea", "lassi", "juice",
+        "coffee", "sharbat", "beverage",
+    ],
+    "meals": [
+        "thali", "biryani", "paratha", "pav bhaji",
+        "rice", "meal", "curry",
+    ],
+}
+
+FOOD_RESTAURANT_TERMS = {
+    "restaurant", "restaurants", "cafe", "cafes",
+    "eatery", "eateries", "food court",
+    "diner", "food outlet",
 }
 
 
 def normalize(value: Any) -> str:
     """Convert supported scalar values to normalized lowercase text."""
-    if value is None:
-        return ""
-
-    if isinstance(value, (dict, list, tuple, set)):
+    if value is None or isinstance(value, (dict, list, tuple, set)):
         return ""
 
     text = str(value).lower().strip()
     text = text.replace("&", " and ")
     text = re.sub(r"[_/|-]+", " ", text)
     text = re.sub(r"[^a-z0-9\s']", " ", text)
-    text = re.sub(r"\s+", " ", text)
-
-    return text.strip()
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def get_properties(entity: dict) -> dict:
@@ -169,7 +189,6 @@ def text_from_value(value: Any) -> str:
             "title", "id", "url",
         ):
             item = value.get(key)
-
             if isinstance(item, (str, int, float)):
                 parts.append(str(item))
 
@@ -195,12 +214,10 @@ def get_text(entity: dict, *keys: str) -> str:
 
     for key in keys:
         value = entity.get(key)
-
         if value is None:
             value = properties.get(key)
 
         extracted = text_from_value(value)
-
         if extracted:
             parts.append(extracted)
 
@@ -216,12 +233,10 @@ def get_field(entity: dict, *keys: str) -> str:
 
     for key in keys:
         value = entity.get(key)
-
         if value is None:
             value = properties.get(key)
 
         extracted = text_from_value(value).strip()
-
         if extracted:
             return extracted
 
@@ -236,20 +251,15 @@ def get_image_url(entity: dict) -> str | None:
     properties = get_properties(entity)
 
     candidates = [
-        entity.get("image"),
-        entity.get("image_url"),
-        entity.get("photo"),
-        entity.get("thumbnail"),
-        properties.get("image"),
-        properties.get("image_url"),
-        properties.get("photo"),
-        properties.get("thumbnail"),
+        entity.get("image"), entity.get("image_url"),
+        entity.get("photo"), entity.get("thumbnail"),
+        properties.get("image"), properties.get("image_url"),
+        properties.get("photo"), properties.get("thumbnail"),
     ]
 
     for candidate in candidates:
         if isinstance(candidate, str):
             url = candidate.strip()
-
             if url.startswith(("https://", "http://")):
                 return url
 
@@ -274,29 +284,23 @@ def get_genres(entity: dict) -> list[str]:
         return []
 
     properties = get_properties(entity)
-    raw_values = []
+    genres = []
 
     for source in (entity, properties):
         for key in ("genres", "genre", "primary_genre"):
             value = source.get(key)
+            if value is None:
+                continue
 
-            if value is not None:
-                raw_values.append(value)
+            items = (
+                value if isinstance(value, (list, tuple, set))
+                else [value]
+            )
 
-    genres = []
-
-    for value in raw_values:
-        items = (
-            value
-            if isinstance(value, (list, tuple, set))
-            else [value]
-        )
-
-        for item in items:
-            genre = normalize(text_from_value(item))
-
-            if genre and genre not in genres:
-                genres.append(genre)
+            for item in items:
+                genre = normalize(text_from_value(item))
+                if genre and genre not in genres:
+                    genres.append(genre)
 
     return genres
 
@@ -306,16 +310,35 @@ def split_interests(interests: Any) -> list[str]:
     if isinstance(interests, (list, tuple, set)):
         raw_items = list(interests)
     else:
-        raw_items = re.split(
-            r"[,;\n]+",
-            str(interests or ""),
-        )
+        raw_items = re.split(r"[,;\n]+", str(interests or ""))
 
     result = []
 
     for item in raw_items:
         value = normalize(item)
+        if value and value not in result:
+            result.append(value)
 
+    return result
+
+
+def expand_interest(interest: str) -> list[str]:
+    """Expand known phrases into useful alternatives."""
+    normalized = normalize(interest)
+
+    if not normalized:
+        return []
+
+    alternatives = [normalized]
+
+    for original, synonyms in INTEREST_SYNONYMS.items():
+        if normalized == normalize(original):
+            alternatives.extend(synonyms)
+
+    result = []
+
+    for alternative in alternatives:
+        value = normalize(alternative)
         if value and value not in result:
             result.append(value)
 
@@ -324,10 +347,9 @@ def split_interests(interests: Any) -> list[str]:
 
 def get_interest_terms(interests: Any) -> list[str]:
     """Return useful interest phrases and meaningful words."""
-    phrases = split_interests(interests)
     terms = []
 
-    for phrase in phrases:
+    for phrase in split_interests(interests):
         if phrase not in terms:
             terms.append(phrase)
 
@@ -365,84 +387,44 @@ def get_entity_metadata(entity: dict) -> dict:
     properties = get_properties(entity)
 
     title = get_field(
-        entity,
-        "name",
-        "title",
-        "entity_name",
-        "display_name",
+        entity, "name", "title", "entity_name", "display_name"
     )
 
     description = get_field(
-        entity,
-        "description",
-        "short_description",
-        "overall_description",
-        "overview",
-        "summary",
+        entity, "description", "short_description",
+        "overall_description", "overview", "summary"
     )
 
     metadata_keys = [
-        "akas",
-        "genres",
-        "genre",
-        "primary_genre",
-        "tags",
-        "keywords",
-        "themes",
-        "categories",
-        "cuisine_description",
-        "specialty_dishes",
-        "speciality_dishes",
-        "overall_description",
-        "good_for",
-        "menu_url",
-        "food_type",
-        "cuisine",
-        "dish",
-        "dishes",
-        "location",
-        "address",
-        "known_for",
-        "interests",
-        "type",
-        "entity_type",
-        "destination",
-        "country",
-        "region",
-        "city",
-        "attractions",
-        "landmarks",
-        "cultural_significance",
-        "heritage",
-        "natural_features",
-        "activities",
+        "akas", "genres", "genre", "primary_genre",
+        "tags", "keywords", "themes", "categories",
+        "cuisine_description", "specialty_dishes",
+        "speciality_dishes", "overall_description",
+        "good_for", "menu_url", "food_type", "cuisine",
+        "dish", "dishes", "location", "address",
+        "known_for", "interests", "type", "entity_type",
+        "destination", "country", "region", "city",
+        "attractions", "landmarks", "cultural_significance",
+        "heritage", "natural_features", "activities",
     ]
 
     metadata_parts = []
 
     for key in metadata_keys:
         value = entity.get(key)
-
         if value is None:
             value = properties.get(key)
 
         extracted = text_from_value(value)
-
         if extracted:
             metadata_parts.append(extracted)
 
     metadata_text = " ".join(metadata_parts)
-
     entity_type = get_field(entity, "entity_type", "type")
 
-    all_text = normalize(
-        " ".join([
-            title,
-            description,
-            metadata_text,
-            entity_type,
-        ])
-    )
+    all_text = normalize(" ".join([
+        title, description, metadata_text, entity_type
+    ]))
 
     return {
         "title": title,
@@ -452,30 +434,6 @@ def get_entity_metadata(entity: dict) -> dict:
         "entity_type": normalize(entity_type),
         "all_text": all_text,
     }
-
-
-def expand_interest(interest: str) -> list[str]:
-    """Expand known phrases into useful alternatives."""
-    normalized = normalize(interest)
-
-    if not normalized:
-        return []
-
-    alternatives = [normalized]
-
-    for original, synonyms in INTEREST_SYNONYMS.items():
-        if normalized == normalize(original):
-            alternatives.extend(synonyms)
-
-    result = []
-
-    for alternative in alternatives:
-        value = normalize(alternative)
-
-        if value and value not in result:
-            result.append(value)
-
-    return result
 
 
 def match_interests(
@@ -497,72 +455,52 @@ def match_interests(
         alternatives = expand_interest(interest)
 
         title_match = any(
-            phrase_in_text(phrase, title)
-            for phrase in alternatives
+            phrase_in_text(p, title) for p in alternatives
         )
-
         genre_match = any(
-            phrase_in_text(phrase, genres)
-            for phrase in alternatives
+            phrase_in_text(p, genres) for p in alternatives
         )
-
         description_match = any(
-            phrase_in_text(phrase, description)
-            for phrase in alternatives
+            phrase_in_text(p, description) for p in alternatives
         )
-
         metadata_match = any(
-            phrase_in_text(phrase, other_metadata)
-            for phrase in alternatives
+            phrase_in_text(p, other_metadata) for p in alternatives
         )
 
         if title_match:
             score += 95
-            matched_interests.append(interest)
-            matched_phrases.append(interest)
-            continue
-
-        if genre_match:
+        elif genre_match:
             score += 90
-            matched_interests.append(interest)
-            matched_phrases.append(interest)
-            continue
-
-        if description_match:
+        elif description_match:
             score += 75
-            matched_interests.append(interest)
-            matched_phrases.append(interest)
-            continue
-
-        if metadata_match:
+        elif metadata_match:
             score += 70
-            matched_interests.append(interest)
-            matched_phrases.append(interest)
-            continue
+        else:
+            meaningful_words = [
+                word for word in interest.split()
+                if len(word) >= 4 and word not in STOP_WORDS
+            ]
 
-        meaningful_words = [
-            word
-            for word in interest.split()
-            if len(word) >= 4 and word not in STOP_WORDS
-        ]
+            if not meaningful_words:
+                continue
 
-        if not meaningful_words:
-            continue
+            matched_words = [
+                word for word in meaningful_words
+                if phrase_in_text(word, all_text)
+            ]
 
-        matched_words = [
-            word
-            for word in meaningful_words
-            if phrase_in_text(word, all_text)
-        ]
+            required_matches = (
+                1 if len(meaningful_words) == 1 else 2
+            )
 
-        required_matches = (
-            1 if len(meaningful_words) == 1 else 2
-        )
+            if len(matched_words) < required_matches:
+                continue
 
-        if len(matched_words) >= required_matches:
             score += 55
-            matched_interests.append(interest)
             matched_phrases.extend(matched_words)
+
+        matched_interests.append(interest)
+        matched_phrases.append(interest)
 
     return (
         list(dict.fromkeys(matched_interests)),
@@ -571,17 +509,13 @@ def match_interests(
     )
 
 
-def category_confirmed(
-    category: str,
-    metadata: dict,
-) -> bool:
+def category_confirmed(category: str, metadata: dict) -> bool:
     """Check for evidence that an entity belongs to the category."""
     normalized_category = normalize(category)
 
     category_name = next(
         (
-            value
-            for key, value in SUPPORTED_CATEGORIES.items()
+            value for key, value in SUPPORTED_CATEGORIES.items()
             if key == normalized_category
         ),
         category,
@@ -607,32 +541,19 @@ def category_confirmed(
 
     if category_name == "Food":
         food_evidence = [
-            "cuisine_description",
-            "specialty_dishes",
-            "speciality_dishes",
-            "food_type",
-            "cuisine",
-            "dish",
-            "dishes",
-            "menu_url",
-            "restaurant",
-            "street food",
-            "indian food",
-            "indian cuisine",
-            "food",
-            "culinary",
-            "bakery",
-            "seafood",
+            "cuisine_description", "specialty_dishes",
+            "speciality_dishes", "food_type", "cuisine",
+            "dish", "dishes", "menu_url", "restaurant",
+            "street food", "indian food", "indian cuisine",
+            "food", "culinary", "bakery", "seafood",
         ]
 
-        food_text = normalize(
-            " ".join([
-                metadata.get("description", ""),
-                metadata.get("metadata", ""),
-                metadata.get("title", ""),
-                entity_type,
-            ])
-        )
+        food_text = normalize(" ".join([
+            metadata.get("description", ""),
+            metadata.get("metadata", ""),
+            metadata.get("title", ""),
+            entity_type,
+        ]))
 
         return any(
             phrase_in_text(term, food_text)
@@ -643,6 +564,81 @@ def category_confirmed(
         phrase_in_text(term, all_text)
         for term in CATEGORY_TERMS[category_name]
     )
+
+
+def get_food_group(recommendation: dict) -> str:
+    """
+    Infer a food group only from evidence in available entity text.
+    Unknown entities remain in the general group.
+    """
+    searchable = normalize(" ".join([
+        recommendation.get("title", ""),
+        recommendation.get("description", ""),
+        " ".join(recommendation.get("matched_terms", [])),
+        " ".join(recommendation.get("genres", [])),
+    ]))
+
+    # Specific groups first to reduce ambiguous classification.
+    priority = [
+        "pani_puri", "chaat", "rolls", "south_indian",
+        "indo_chinese", "sweets", "grilled", "beverages",
+        "sandwiches", "meals",
+    ]
+
+    for group in priority:
+        terms = FOOD_DIVERSITY_GROUPS[group]
+
+        if any(phrase_in_text(term, searchable) for term in terms):
+            return group
+
+    return "general"
+
+
+def get_dedup_text(recommendation: dict) -> str:
+    """Normalize a title for duplicate detection."""
+    title = normalize(recommendation.get("title", ""))
+
+    # Remove common business suffixes that rarely distinguish places.
+    title = re.sub(
+        r"\b(restaurant|restaurants|cafe|cafes|official|india)\b",
+        " ",
+        title,
+    )
+
+    return re.sub(r"\s+", " ", title).strip()
+
+
+def are_similar_titles(first: str, second: str) -> bool:
+    """
+    Detect exact and near-duplicate names.
+    Similarity is a heuristic, so short titles use stricter checks.
+    """
+    first = get_dedup_text({"title": first})
+    second = get_dedup_text({"title": second})
+
+    if not first or not second:
+        return False
+
+    if first == second:
+        return True
+
+    first_tokens = set(first.split())
+    second_tokens = set(second.split())
+
+    if not first_tokens or not second_tokens:
+        return False
+
+    overlap = len(first_tokens & second_tokens) / max(
+        len(first_tokens | second_tokens), 1
+    )
+
+    ratio = SequenceMatcher(None, first, second).ratio()
+
+    # Avoid aggressively collapsing short, common names.
+    if min(len(first), len(second)) < 8:
+        return overlap >= 0.8 and ratio >= 0.9
+
+    return overlap >= 0.8 or ratio >= 0.90
 
 
 def score_recommendation(
@@ -676,12 +672,11 @@ def score_recommendation(
         return None
 
     title = metadata.get("title") or "Untitled recommendation"
-
     description = metadata.get("description") or (
         "No description was provided by Qloo."
     )
 
-    return {
+    recommendation = {
         "id": str(entity_id),
         "entity_id": str(entity_id),
         "title": title,
@@ -700,6 +695,89 @@ def score_recommendation(
         ),
     }
 
+    if category == "Food":
+        recommendation["diversity_group"] = get_food_group(
+            recommendation
+        )
+
+    return recommendation
+
+
+def select_diverse_recommendations(
+    candidates: list[dict],
+    category: str,
+    limit: int = RESULT_LIMIT,
+) -> list[dict]:
+    """
+    Greedy relevance-first selection with duplicate control and
+    a soft penalty for repeated food groups.
+
+    Relevance is preserved: diversity never adds an unrelated entity.
+    """
+    if not candidates or limit <= 0:
+        return []
+
+    remaining = sorted(
+        candidates,
+        key=lambda item: item.get("score", 0),
+        reverse=True,
+    )
+
+    selected = []
+    seen_ids = set()
+    seen_titles = set()
+    group_counts = {}
+
+    while remaining and len(selected) < limit:
+        best_item = None
+        best_adjusted_score = float("-inf")
+
+        for item in remaining:
+            item_id = str(item.get("id", ""))
+            title = item.get("title", "")
+
+            if item_id in seen_ids:
+                continue
+
+            # Reject near-duplicate display names.
+            if any(
+                are_similar_titles(title, previous_title)
+                for previous_title in seen_titles
+            ):
+                continue
+
+            base_score = float(item.get("score", 0))
+            adjusted_score = base_score
+
+            if category == "Food":
+                group = item.get("diversity_group", "general")
+                repeat_count = group_counts.get(group, 0)
+
+                # Soft penalty: a strong relevant result can still win.
+                adjusted_score -= min(repeat_count * 18, 36)
+
+            if adjusted_score > best_adjusted_score:
+                best_item = item
+                best_adjusted_score = adjusted_score
+
+        if best_item is None:
+            break
+
+        selected.append(best_item)
+        seen_ids.add(str(best_item.get("id", "")))
+        seen_titles.append(best_item.get("title", ""))
+
+        if category == "Food":
+            group = best_item.get("diversity_group", "general")
+            group_counts[group] = group_counts.get(group, 0) + 1
+
+        remaining = [
+            item for item in remaining
+            if str(item.get("id", "")) != str(best_item.get("id", ""))
+        ]
+
+    return selected
+
 
 def create_recommendation_request(
     interests: Any,
@@ -708,7 +786,7 @@ def create_recommendation_request(
     cultural_data: Any = None,
 ) -> dict:
     """
-    Create ranked recommendations from Qloo research results.
+    Create relevance-ranked, diversity-aware recommendations.
 
     Keeps the function signature and response keys used by main.py.
     """
@@ -716,8 +794,7 @@ def create_recommendation_request(
 
     category_name = next(
         (
-            value
-            for key, value in SUPPORTED_CATEGORIES.items()
+            value for key, value in SUPPORTED_CATEGORIES.items()
             if key == normalized_category
         ),
         str(category or "").strip(),
@@ -748,9 +825,8 @@ def create_recommendation_request(
     if not isinstance(entities, list):
         entities = []
 
-    recommendations = []
+    candidates = []
     seen_ids = set()
-    seen_titles = set()
 
     for entity in entities:
         if not isinstance(entity, dict):
@@ -765,37 +841,10 @@ def create_recommendation_request(
         if not entity_id:
             continue
 
-        metadata = get_entity_metadata(entity)
-        title_key = normalize(metadata.get("title", ""))
+        entity_id = str(entity_id)
 
-        # Remove exact duplicate entities and duplicate display titles.
-        if str(entity_id) in seen_ids:
+        if entity_id in seen_ids:
             continue
-
-        if title_key and title_key in seen_titles:
-            continue
-
-        category_ok = category_confirmed(category_name, metadata)
-
-        matched, match_score, matched_terms = match_interests(
-            interests,
-            metadata,
-        )
-
-        print(
-            "[RECOMMENDER DEBUG]",
-            {
-                "category": category_name,
-                "title": metadata.get("title"),
-                "entity_type": metadata.get("entity_type"),
-                "category_ok": category_ok,
-                "matched_interests": matched,
-                "match_score": match_score,
-                "matched_terms": matched_terms,
-                "genres": metadata.get("genres"),
-                "has_description": bool(metadata.get("description")),
-            },
-        )
 
         recommendation = score_recommendation(
             entity=entity,
@@ -803,22 +852,43 @@ def create_recommendation_request(
             category=category_name,
         )
 
+        metadata = get_entity_metadata(entity)
+
+        print(
+            "[RECOMMENDER DEBUG]",
+            {
+                "category": category_name,
+                "title": metadata.get("title"),
+                "entity_type": metadata.get("entity_type"),
+                "category_ok": category_confirmed(
+                    category_name, metadata
+                ),
+                "matched_interests": (
+                    recommendation or {}
+                ).get("matched_interests", []),
+                "match_score": (
+                    recommendation or {}
+                ).get("score", 0),
+                "food_group": (
+                    recommendation or {}
+                ).get("diversity_group"),
+                "has_description": bool(
+                    metadata.get("description")
+                ),
+            },
+        )
+
         if recommendation is None:
             continue
 
-        seen_ids.add(str(entity_id))
+        seen_ids.add(entity_id)
+        candidates.append(recommendation)
 
-        if title_key:
-            seen_titles.add(title_key)
-
-        recommendations.append(recommendation)
-
-    recommendations.sort(
-        key=lambda item: item.get("score", 0),
-        reverse=True,
+    recommendations = select_diverse_recommendations(
+        candidates=candidates,
+        category=category_name,
+        limit=RESULT_LIMIT,
     )
-
-    recommendations = recommendations[:RESULT_LIMIT]
 
     if recommendations:
         return {
@@ -853,6 +923,7 @@ def create_recommendation_request(
         ),
         "source": "Qloo",
     }
+
 
 
 
