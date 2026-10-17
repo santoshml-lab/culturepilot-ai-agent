@@ -1,3 +1,4 @@
+
 import re
 from typing import Any
 
@@ -37,7 +38,6 @@ CATEGORY_TERMS = {
     ],
 }
 
-# Common words are excluded from individual-word matching.
 STOP_WORDS = {
     "the", "and", "for", "with", "from", "that", "this",
     "into", "about", "best", "good", "great", "some",
@@ -47,8 +47,6 @@ STOP_WORDS = {
     "famous", "type", "types", "things", "something",
     "near", "very", "more", "most", "which", "what",
 }
-
-# Specific phrase alternatives help with common cuisine queries.
 
 INTEREST_SYNONYMS = {
     "indian street food": [
@@ -99,9 +97,6 @@ INTEREST_SYNONYMS = {
 }
 
 
- 
-
-
 def normalize(value: Any) -> str:
     """Convert a value to normalized lowercase text."""
     if value is None:
@@ -125,7 +120,6 @@ def get_properties(entity: dict) -> dict:
         return {}
 
     properties = entity.get("properties", {})
-
     return properties if isinstance(properties, dict) else {}
 
 
@@ -144,12 +138,7 @@ def text_from_value(value: Any) -> str:
         parts = []
 
         for key in (
-            "name",
-            "value",
-            "label",
-            "description",
-            "title",
-            "id",
+            "name", "value", "label", "description", "title", "id"
         ):
             item = value.get(key)
 
@@ -267,10 +256,11 @@ def get_genres(entity: dict) -> list[str]:
     genres = []
 
     for value in raw_values:
-        if isinstance(value, (list, tuple, set)):
-            items = value
-        else:
-            items = [value]
+        items = (
+            value
+            if isinstance(value, (list, tuple, set))
+            else [value]
+        )
 
         for item in items:
             genre = normalize(text_from_value(item))
@@ -311,7 +301,6 @@ def get_interest_terms(interests: Any) -> list[str]:
         if phrase not in terms:
             terms.append(phrase)
 
-        # Include explicit synonyms for known multiword interests.
         for original, alternatives in INTEREST_SYNONYMS.items():
             if phrase == original:
                 for alternative in alternatives:
@@ -320,7 +309,6 @@ def get_interest_terms(interests: Any) -> list[str]:
                     if alternative and alternative not in terms:
                         terms.append(alternative)
 
-        # Keep individual terms available for secondary matching.
         words = [
             word
             for word in phrase.split()
@@ -346,12 +334,7 @@ def phrase_in_text(phrase: str, text: str) -> bool:
 
 
 def get_entity_metadata(entity: dict) -> dict:
-    """
-    Collect metadata useful for recommendation matching.
-
-    Qloo may store important information in properties rather
-    than at the top level, particularly for food entities.
-    """
+    """Collect metadata useful for recommendation matching."""
     if not isinstance(entity, dict):
         entity = {}
 
@@ -374,7 +357,6 @@ def get_entity_metadata(entity: dict) -> dict:
         "summary",
     )
 
-    # These fields are especially important for food relevance.
     metadata_keys = [
         "akas",
         "genres",
@@ -415,12 +397,7 @@ def get_entity_metadata(entity: dict) -> dict:
 
     metadata_text = " ".join(metadata_parts)
 
-    # Include the entity type when available.
-    entity_type = get_field(
-        entity,
-        "entity_type",
-        "type",
-    )
+    entity_type = get_field(entity, "entity_type", "type")
 
     return {
         "title": title,
@@ -429,14 +406,12 @@ def get_entity_metadata(entity: dict) -> dict:
         "metadata": metadata_text,
         "entity_type": normalize(entity_type),
         "all_text": normalize(
-            " ".join(
-                [
-                    title,
-                    description,
-                    metadata_text,
-                    entity_type,
-                ]
-            )
+            " ".join([
+                title,
+                description,
+                metadata_text,
+                entity_type,
+            ])
         ),
     }
 
@@ -469,13 +444,7 @@ def match_interests(
     interests: Any,
     metadata: dict,
 ) -> tuple[list[str], int, list[str]]:
-    """
-    Match interests against entity information.
-
-    Full phrases receive priority. Individual words are used
-    only as secondary evidence, not as automatic confirmation
-    of every multiword interest.
-    """
+    """Match interests against entity information."""
     title = normalize(metadata.get("title", ""))
     description = normalize(metadata.get("description", ""))
     genres = normalize(" ".join(metadata.get("genres", [])))
@@ -533,8 +502,6 @@ def match_interests(
             matched_phrases.append(interest)
             continue
 
-        # Secondary matching: avoid treating one common word
-        # as proof of relevance for a longer query.
         meaningful_words = [
             word
             for word in interest.split()
@@ -550,9 +517,6 @@ def match_interests(
             if phrase_in_text(word, all_text)
         ]
 
-        # A multiword interest needs at least two matching
-        # meaningful words, unless only one meaningful word
-        # exists in the original query.
         required_matches = (
             1 if len(meaningful_words) == 1 else 2
         )
@@ -591,7 +555,6 @@ def category_confirmed(
     if category_name not in CATEGORY_TERMS:
         return False
 
-    # Music and movie entities often have reliable entity types.
     if category_name == "Movies":
         if "movie" in entity_type or "film" in entity_type:
             return True
@@ -604,8 +567,6 @@ def category_confirmed(
         if "destination" in entity_type:
             return True
 
-    # A generic place entity is not enough to establish food
-    # relevance: look for actual cuisine or food-related evidence.
     if category_name == "Food":
         food_evidence = [
             "cuisine_description",
@@ -627,13 +588,11 @@ def category_confirmed(
         ]
 
         food_text = normalize(
-            " ".join(
-                [
-                    metadata.get("description", ""),
-                    metadata.get("metadata", ""),
-                    metadata.get("title", ""),
-                ]
-            )
+            " ".join([
+                metadata.get("description", ""),
+                metadata.get("metadata", ""),
+                metadata.get("title", ""),
+            ])
         )
 
         return any(
@@ -652,12 +611,7 @@ def score_recommendation(
     interests: Any,
     category: str,
 ) -> dict | None:
-    """
-    Score one Qloo entity.
-
-    Returns None if the result does not have sufficient evidence
-    of both category relevance and interest relevance.
-    """
+    """Score one Qloo entity and reject weak matches."""
     if not isinstance(entity, dict):
         return None
 
@@ -672,12 +626,7 @@ def score_recommendation(
     if not entity_id:
         return None
 
-    is_category_confirmed = category_confirmed(
-        category,
-        metadata,
-    )
-
-    if not is_category_confirmed:
+    if not category_confirmed(category, metadata):
         return None
 
     matched_interests, raw_score, matched_phrases = (
@@ -687,8 +636,6 @@ def score_recommendation(
     if not matched_interests:
         return None
 
-    # Avoid presenting a weak word-level match as a high-confidence
-    # recommendation. Full phrase matches retain their higher scores.
     final_score = min(raw_score, 100)
 
     if final_score < 60:
@@ -726,12 +673,9 @@ def create_recommendation_request(
     cultural_data: Any = None,
 ) -> dict:
     """
-    Create ranked recommendations from the researcher's Qloo results.
+    Create ranked recommendations from Qloo research results.
 
-    This function keeps the signature expected by main.py:
-    create_recommendation_request(
-        interests, category, plan, cultural_data
-    )
+    Keeps the function signature expected by main.py.
     """
     normalized_category = normalize(category)
 
@@ -760,7 +704,6 @@ def create_recommendation_request(
         }
 
     if isinstance(cultural_data, dict):
-        # Support callers that pass the entire research response.
         entities = cultural_data.get("results", [])
     elif isinstance(cultural_data, list):
         entities = cultural_data
@@ -791,25 +734,27 @@ def create_recommendation_request(
         if entity_key in seen_ids:
             continue
 
-        
         metadata = get_entity_metadata(entity)
         category_ok = category_confirmed(category_name, metadata)
+
         matched, match_score, matched_terms = match_interests(
-    interests, metadata
-)
+            interests, metadata
+        )
 
+        # Diagnostic logs: inspect these in Render Logs.
         print(
-            "[MUSIC DEBUG]",
-    {
-        "title": metadata.get("title"),
-        "entity_type": metadata.get("entity_type"),
-        "category_ok": category_ok,
-        "matched_interests": matched,
-        "match_score": match_score,
-        "genres": metadata.get("genres"),
-    }
-)
-
+            "[RECOMMENDER DEBUG]",
+            {
+                "category": category_name,
+                "title": metadata.get("title"),
+                "entity_type": metadata.get("entity_type"),
+                "category_ok": category_ok,
+                "matched_interests": matched,
+                "match_score": match_score,
+                "matched_terms": matched_terms,
+                "genres": metadata.get("genres"),
+            },
+        )
 
         recommendation = score_recommendation(
             entity=entity,
@@ -863,6 +808,7 @@ def create_recommendation_request(
         ),
         "source": "Qloo",
     }
+
 
 
 
