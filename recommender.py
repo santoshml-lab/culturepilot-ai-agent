@@ -798,8 +798,8 @@ def create_recommendation_request(
     interests, metadata
 )
 
-print(
-    "[MUSIC DEBUG]",
+        print(
+            "[MUSIC DEBUG]",
     {
         "title": metadata.get("title"),
         "entity_type": metadata.get("entity_type"),
