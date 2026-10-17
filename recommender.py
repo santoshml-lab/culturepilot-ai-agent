@@ -16,10 +16,12 @@ CATEGORY_TERMS = {
     "Movies": [
         "movie", "film", "cinema", "actor", "actress",
         "director", "screenplay", "motion picture",
+        "science fiction", "sci fi",
     ],
     "Music": [
         "music", "musical", "singer", "artist", "album",
         "song", "band", "musician", "composer", "genre",
+        "classical", "hindustani", "carnatic", "piano",
     ],
     "Food": [
         "food", "cuisine", "restaurant", "street food",
@@ -34,7 +36,8 @@ CATEGORY_TERMS = {
         "travel", "destination", "tourism", "tourist",
         "vacation", "holiday", "landmark", "attraction",
         "island", "city", "country", "national park",
-        "travel destination",
+        "travel destination", "mountain", "nature",
+        "heritage", "cultural heritage", "landscape",
     ],
 }
 
@@ -94,11 +97,35 @@ INTEREST_SYNONYMS = {
         "meditative music",
         "instrumental music",
     ],
+    "relaxing instrumental piano": [
+        "relaxing instrumental piano",
+        "instrumental piano",
+        "piano music",
+        "relaxing music",
+        "classical piano",
+        "ambient piano",
+    ],
+    "space exploration": [
+        "space exploration",
+        "space adventure",
+        "outer space",
+        "space travel",
+        "space mission",
+        "interstellar",
+    ],
+    "cultural heritage": [
+        "cultural heritage",
+        "heritage sites",
+        "historical sites",
+        "historic landmarks",
+        "cultural landmarks",
+        "history and culture",
+    ],
 }
 
 
 def normalize(value: Any) -> str:
-    """Convert a value to normalized lowercase text."""
+    """Convert supported scalar values to normalized lowercase text."""
     if value is None:
         return ""
 
@@ -124,7 +151,7 @@ def get_properties(entity: dict) -> dict:
 
 
 def text_from_value(value: Any) -> str:
-    """Extract searchable text from strings, lists, or Qloo tag objects."""
+    """Extract searchable text from strings, lists, and tag objects."""
     if value is None:
         return ""
 
@@ -138,7 +165,8 @@ def text_from_value(value: Any) -> str:
         parts = []
 
         for key in (
-            "name", "value", "label", "description", "title", "id"
+            "name", "value", "label", "description",
+            "title", "id", "url",
         ):
             item = value.get(key)
 
@@ -158,7 +186,7 @@ def text_from_value(value: Any) -> str:
 
 
 def get_text(entity: dict, *keys: str) -> str:
-    """Collect text from the entity and its properties."""
+    """Collect text from entity fields and properties."""
     if not isinstance(entity, dict):
         return ""
 
@@ -201,7 +229,7 @@ def get_field(entity: dict, *keys: str) -> str:
 
 
 def get_image_url(entity: dict) -> str | None:
-    """Find an image URL if Qloo supplies one."""
+    """Find an HTTP image URL if Qloo supplies one."""
     if not isinstance(entity, dict):
         return None
 
@@ -211,9 +239,11 @@ def get_image_url(entity: dict) -> str | None:
         entity.get("image"),
         entity.get("image_url"),
         entity.get("photo"),
+        entity.get("thumbnail"),
         properties.get("image"),
         properties.get("image_url"),
         properties.get("photo"),
+        properties.get("thumbnail"),
     ]
 
     for candidate in candidates:
@@ -272,7 +302,7 @@ def get_genres(entity: dict) -> list[str]:
 
 
 def split_interests(interests: Any) -> list[str]:
-    """Split a comma- or semicolon-separated interest string."""
+    """Split comma-, semicolon-, or newline-separated interests."""
     if isinstance(interests, (list, tuple, set)):
         raw_items = list(interests)
     else:
@@ -301,22 +331,16 @@ def get_interest_terms(interests: Any) -> list[str]:
         if phrase not in terms:
             terms.append(phrase)
 
-        for original, alternatives in INTEREST_SYNONYMS.items():
-            if phrase == original:
-                for alternative in alternatives:
-                    alternative = normalize(alternative)
+        for alternative in expand_interest(phrase):
+            if alternative not in terms:
+                terms.append(alternative)
 
-                    if alternative and alternative not in terms:
-                        terms.append(alternative)
-
-        words = [
-            word
-            for word in phrase.split()
-            if len(word) >= 4 and word not in STOP_WORDS
-        ]
-
-        for word in words:
-            if word not in terms:
+        for word in phrase.split():
+            if (
+                len(word) >= 4
+                and word not in STOP_WORDS
+                and word not in terms
+            ):
                 terms.append(word)
 
     return terms
@@ -334,7 +358,7 @@ def phrase_in_text(phrase: str, text: str) -> bool:
 
 
 def get_entity_metadata(entity: dict) -> dict:
-    """Collect metadata useful for recommendation matching."""
+    """Collect metadata used for relevance and category matching."""
     if not isinstance(entity, dict):
         entity = {}
 
@@ -380,6 +404,18 @@ def get_entity_metadata(entity: dict) -> dict:
         "address",
         "known_for",
         "interests",
+        "type",
+        "entity_type",
+        "destination",
+        "country",
+        "region",
+        "city",
+        "attractions",
+        "landmarks",
+        "cultural_significance",
+        "heritage",
+        "natural_features",
+        "activities",
     ]
 
     metadata_parts = []
@@ -399,20 +435,22 @@ def get_entity_metadata(entity: dict) -> dict:
 
     entity_type = get_field(entity, "entity_type", "type")
 
+    all_text = normalize(
+        " ".join([
+            title,
+            description,
+            metadata_text,
+            entity_type,
+        ])
+    )
+
     return {
         "title": title,
         "description": description,
         "genres": get_genres(entity),
         "metadata": metadata_text,
         "entity_type": normalize(entity_type),
-        "all_text": normalize(
-            " ".join([
-                title,
-                description,
-                metadata_text,
-                entity_type,
-            ])
-        ),
+        "all_text": all_text,
     }
 
 
@@ -444,7 +482,7 @@ def match_interests(
     interests: Any,
     metadata: dict,
 ) -> tuple[list[str], int, list[str]]:
-    """Match interests against entity information."""
+    """Match user interests against available entity information."""
     title = normalize(metadata.get("title", ""))
     description = normalize(metadata.get("description", ""))
     genres = normalize(" ".join(metadata.get("genres", [])))
@@ -537,7 +575,7 @@ def category_confirmed(
     category: str,
     metadata: dict,
 ) -> bool:
-    """Check that the result contains evidence for its category."""
+    """Check for evidence that an entity belongs to the category."""
     normalized_category = normalize(category)
 
     category_name = next(
@@ -592,6 +630,7 @@ def category_confirmed(
                 metadata.get("description", ""),
                 metadata.get("metadata", ""),
                 metadata.get("title", ""),
+                entity_type,
             ])
         )
 
@@ -633,15 +672,11 @@ def score_recommendation(
         match_interests(interests, metadata)
     )
 
-    if not matched_interests:
-        return None
-
-    final_score = min(raw_score, 100)
-
-    if final_score < 60:
+    if not matched_interests or raw_score < 60:
         return None
 
     title = metadata.get("title") or "Untitled recommendation"
+
     description = metadata.get("description") or (
         "No description was provided by Qloo."
     )
@@ -653,7 +688,7 @@ def score_recommendation(
         "name": title,
         "description": description,
         "category": category,
-        "score": final_score,
+        "score": min(raw_score, 100),
         "matched_interests": matched_interests,
         "matched_terms": matched_phrases,
         "genres": metadata.get("genres", []),
@@ -675,7 +710,7 @@ def create_recommendation_request(
     """
     Create ranked recommendations from Qloo research results.
 
-    Keeps the function signature expected by main.py.
+    Keeps the function signature and response keys used by main.py.
     """
     normalized_category = normalize(category)
 
@@ -715,6 +750,7 @@ def create_recommendation_request(
 
     recommendations = []
     seen_ids = set()
+    seen_titles = set()
 
     for entity in entities:
         if not isinstance(entity, dict):
@@ -729,19 +765,23 @@ def create_recommendation_request(
         if not entity_id:
             continue
 
-        entity_key = str(entity_id)
+        metadata = get_entity_metadata(entity)
+        title_key = normalize(metadata.get("title", ""))
 
-        if entity_key in seen_ids:
+        # Remove exact duplicate entities and duplicate display titles.
+        if str(entity_id) in seen_ids:
             continue
 
-        metadata = get_entity_metadata(entity)
+        if title_key and title_key in seen_titles:
+            continue
+
         category_ok = category_confirmed(category_name, metadata)
 
         matched, match_score, matched_terms = match_interests(
-            interests, metadata
+            interests,
+            metadata,
         )
 
-        # Diagnostic logs: inspect these in Render Logs.
         print(
             "[RECOMMENDER DEBUG]",
             {
@@ -753,6 +793,7 @@ def create_recommendation_request(
                 "match_score": match_score,
                 "matched_terms": matched_terms,
                 "genres": metadata.get("genres"),
+                "has_description": bool(metadata.get("description")),
             },
         )
 
@@ -765,7 +806,11 @@ def create_recommendation_request(
         if recommendation is None:
             continue
 
-        seen_ids.add(entity_key)
+        seen_ids.add(str(entity_id))
+
+        if title_key:
+            seen_titles.add(title_key)
+
         recommendations.append(recommendation)
 
     recommendations.sort(
@@ -808,6 +853,7 @@ def create_recommendation_request(
         ),
         "source": "Qloo",
     }
+
 
 
 
