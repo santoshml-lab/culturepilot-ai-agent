@@ -5,7 +5,7 @@ import logging
 import requests
 
 QLOO_BASE_URL = "https://hackathon.api.qloo.com"
-TIMEOUT = 20
+TIMEOUT = 35
 RESULT_LIMIT = 10
 DESCRIPTION_LIMIT = 250
 
