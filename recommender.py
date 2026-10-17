@@ -1,108 +1,77 @@
-
 import re
-
 
 MIN_MATCH_SCORE = 60
 RESULT_LIMIT = 10
 
 INTEREST_ALIASES = {
     "sci-fi": [
-        "science fiction",
-        "futuristic",
-        "space exploration",
-        "alien",
+        "science fiction", "futuristic",
+        "space exploration", "alien",
         "artificial intelligence",
     ],
     "science fiction": [
-        "sci-fi",
-        "futuristic",
-        "space exploration",
-        "alien",
+        "sci-fi", "futuristic",
+        "space exploration", "alien",
         "artificial intelligence",
     ],
     "space exploration": [
-        "spacecraft",
-        "astronaut",
-        "galaxy",
-        "spaceflight",
-        "space mission",
+        "spacecraft", "astronaut", "galaxy",
+        "spaceflight", "space mission",
         "planetary exploration",
     ],
     "intelligent aliens": [
         "extraterrestrial intelligence",
-        "alien intelligence",
-        "intelligent extraterrestrial",
-        "alien civilization",
-        "first contact",
-        "intelligent alien",
-        "extraterrestrial",
+        "alien intelligence", "alien civilization",
+        "first contact", "extraterrestrial",
     ],
     "time travel": [
-        "time-travel",
-        "time machine",
-        "time loop",
-        "travels through time",
-        "travel through time",
-        "back in time",
-        "temporal journey",
-        "timeline",
+        "time-travel", "time machine", "time loop",
+        "travels through time", "back in time",
+        "temporal journey", "timeline",
     ],
     "artificial intelligence": [
-        "machine intelligence",
-        "intelligent machine",
-        "android",
-        "sentient robot",
-        "artificial life",
-        "robotics",
+        "machine intelligence", "intelligent machine",
+        "android", "sentient robot",
+        "artificial life", "robotics",
     ],
     "adventure": [
-        "expedition",
-        "exploration",
+        "expedition", "exploration",
         "adventurous journey",
     ],
     "comedy": [
-        "comedic",
-        "humorous",
-        "black comedy",
-        "satire",
+        "comedic", "humorous",
+        "black comedy", "satire",
     ],
     "horror": [
-        "horror film",
-        "supernatural horror",
+        "horror film", "supernatural horror",
         "creature horror",
     ],
-    "indie pop": [
-        "indie pop",
-        "independent pop",
-    ],
+    "indie pop": ["independent pop"],
+    "indie rock": ["indie music", "independent rock"],
+    "jazz": ["jazz music"],
     "indian street food": [
-        "indian street food",
-        "street food",
-        "indian cuisine",
+        "street food", "indian cuisine",
     ],
     "mountain destinations": [
-        "mountain destinations",
-        "mountain travel",
-        "mountains",
+        "mountain travel", "mountains",
     ],
 }
 
 
 def normalize(text):
-    """Normalize text while preserving word boundaries."""
-    text = str(text or "").casefold()
-    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+    if isinstance(text, (list, tuple, set)):
+        text = " ".join(str(value) for value in text)
+    return re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        str(text or "").casefold(),
+    ).strip()
 
 
 def contains_phrase(text, phrase):
-    """Match a normalized complete phrase."""
-    normalized_text = f" {normalize(text)} "
-    normalized_phrase = normalize(phrase)
-
-    if not normalized_phrase:
-        return False
-
-    return f" {normalized_phrase} " in normalized_text
+    text = f" {normalize(text)} "
+    phrase = normalize(phrase)
+    return bool(phrase) and f" {phrase} " in text
 
 
 def split_interests(interests):
@@ -114,180 +83,203 @@ def split_interests(interests):
 
 
 def get_interest_signals(interest):
-    normalized_interest = normalize(interest)
-    signals = {normalized_interest}
+    normalized = normalize(interest)
+    signals = {normalized}
 
     for key, aliases in INTEREST_ALIASES.items():
-        if normalized_interest == normalize(key):
+        if normalized == normalize(key):
             signals.update(normalize(alias) for alias in aliases)
 
     return {signal for signal in signals if signal}
 
 
+def get_properties(item):
+    properties = item.get("properties")
+    return properties if isinstance(properties, dict) else {}
+
+
+def get_text(value):
+    """Convert common Qloo metadata values to searchable text."""
+    if isinstance(value, str):
+        return value
+
+    if isinstance(value, (int, float)):
+        return str(value)
+
+    if isinstance(value, list):
+        return " ".join(
+            get_text(part) for part in value if part is not None
+        )
+
+    if isinstance(value, dict):
+        # Common named metadata objects
+        for key in ("name", "value", "label", "title", "description"):
+            if value.get(key):
+                return get_text(value[key])
+
+        return " ".join(get_text(v) for v in value.values())
+
+    return ""
+
+
+def get_field(item, keys):
+    properties = get_properties(item)
+
+    for key in keys:
+        value = item.get(key)
+        if value:
+            return value
+
+    for key in keys:
+        value = properties.get(key)
+        if value:
+            return value
+
+    return None
+
+
 def get_image_url(item):
-    """Extract an ordinary HTTP/HTTPS image URL."""
-    properties = item.get("properties") or {}
-    image = item.get("image") or properties.get("image")
+    image = get_field(item, ["image", "images", "image_url"])
+
+    if isinstance(image, list):
+        image = image[0] if image else None
 
     if isinstance(image, dict):
-        url = image.get("url")
-    elif isinstance(image, str):
-        url = image
-    else:
-        url = None
+        image = image.get("url") or image.get("src")
 
-    if isinstance(url, str) and url.startswith(("https://", "http://")):
-        return url
+    if isinstance(image, str) and image.startswith(("https://", "http://")):
+        return image
 
     return None
 
 
 def get_genres(item):
-    """Read genre metadata from common response locations."""
-    properties = item.get("properties") or {}
-    genres = item.get("genres") or properties.get("genres") or []
-
-    if isinstance(genres, str):
-        return [genres]
-
-    if isinstance(genres, list):
-        return [
-            str(genre)
-            for genre in genres
-            if isinstance(genre, (str, int, float))
-        ]
-
-    return []
+    value = get_field(item, ["genres", "genre"])
+    if not value:
+        return []
+    if not isinstance(value, list):
+        value = [value]
+    return [get_text(v) for v in value if get_text(v)]
 
 
 def get_keywords(item):
-    """Read keyword metadata safely."""
-    properties = item.get("properties") or {}
-    keywords = item.get("keywords") or properties.get("keywords") or []
-
-    if isinstance(keywords, str):
-        return [keywords]
-
-    if isinstance(keywords, list):
-        return [
-            str(value)
-            for value in keywords
-            if isinstance(value, (str, int, float))
-        ]
-
-    return []
+    value = get_field(
+        item,
+        ["keywords", "tags", "interests", "themes", "subgenres"],
+    )
+    if not value:
+        return []
+    if not isinstance(value, list):
+        value = [value]
+    return [get_text(v) for v in value if get_text(v)]
 
 
 def score_recommendation(item, interests):
-    properties = item.get("properties") or {}
+    properties = get_properties(item)
 
     title = (
         item.get("name")
-        or properties.get("name")
         or item.get("title")
+        or properties.get("name")
         or properties.get("title")
         or "Untitled recommendation"
     )
 
-    description = (
-        properties.get("short_description")
-        or properties.get("description")
-        or item.get("short_description")
-        or item.get("description")
-        or ""
+    description = get_field(
+        item,
+        [
+            "short_description",
+            "description",
+            "overview",
+            "disambiguation",
+        ],
     )
 
+    description_text = get_text(description)
     genres = get_genres(item)
     keywords = get_keywords(item)
 
-    normalized_title = normalize(title)
-    normalized_description = normalize(description)
-    normalized_genres = normalize(" ".join(genres))
-    normalized_keywords = normalize(" ".join(keywords))
+    # Include only useful, text-based metadata.
+    metadata_text = " ".join([
+        get_text(properties.get("akas")),
+        get_text(properties.get("short_description")),
+        get_text(properties.get("description")),
+        get_text(properties.get("genres")),
+        get_text(properties.get("keywords")),
+        get_text(properties.get("tags")),
+        get_text(properties.get("themes")),
+    ])
 
-    matched_interests = []
     title_matches = []
     genre_matches = []
     keyword_matches = []
     description_matches = []
+    metadata_matches = []
 
     for interest in interests:
         signals = get_interest_signals(interest)
 
         def matches_any(text):
-            return any(
-                contains_phrase(text, signal)
-                for signal in signals
-            )
+            return any(contains_phrase(text, signal) for signal in signals)
 
-        title_match = matches_any(normalized_title)
-        genre_match = matches_any(normalized_genres)
-        keyword_match = matches_any(normalized_keywords)
-        description_match = matches_any(normalized_description)
-
-        if any([
-            title_match,
-            genre_match,
-            keyword_match,
-            description_match,
-        ]):
-            matched_interests.append(interest)
-
-        if title_match:
+        if matches_any(title):
             title_matches.append(interest)
 
-        if genre_match:
+        if matches_any(genres):
             genre_matches.append(interest)
 
-        if keyword_match:
+        if matches_any(keywords):
             keyword_matches.append(interest)
 
-        if description_match:
+        if matches_any(description_text):
             description_matches.append(interest)
 
-    # Score the strongest evidence rather than rewarding repeated
-    # mentions of the same interest across every field.
+        if matches_any(metadata_text):
+            metadata_matches.append(interest)
+
+    matched_interests = list(dict.fromkeys(
+        title_matches
+        + genre_matches
+        + keyword_matches
+        + description_matches
+        + metadata_matches
+    ))
+
+    # Score the strongest evidence, not duplicate mentions.
     score = 0
+    evidence = []
 
     if title_matches:
         score = max(score, 95)
+        evidence.append("title")
 
     if genre_matches:
         score = max(score, 90)
+        evidence.append("genre")
 
     if keyword_matches:
         score = max(score, 80)
+        evidence.append("keywords")
 
     if description_matches:
         score = max(score, 70)
+        evidence.append("description")
 
-    # No matching evidence means this item is not recommended.
+    if metadata_matches:
+        score = max(score, 70)
+        evidence.append("metadata")
+
     if not matched_interests:
         score = 10
         reason = (
-            "No strong match was found for your interests. "
-            "This result has been excluded from recommendations."
+            "No matching interest was found in the available metadata."
         )
     else:
-        evidence = []
-
-        if title_matches:
-            evidence.append("title")
-
-        if genre_matches:
-            evidence.append("genre")
-
-        if keyword_matches:
-            evidence.append("keywords")
-
-        if description_matches:
-            evidence.append("description")
-
         reason = (
             "Matched interests: "
             + ", ".join(matched_interests)
             + ". Evidence: "
-            + ", ".join(evidence)
+            + ", ".join(dict.fromkeys(evidence))
             + "."
         )
 
@@ -295,8 +287,8 @@ def score_recommendation(item, interests):
         "title": str(title),
         "category": None,
         "description": (
-            str(description)
-            if description
+            description_text
+            if description_text
             else "No additional description available."
         ),
         "image_url": get_image_url(item),
@@ -329,22 +321,15 @@ def create_recommendation_request(
         if not isinstance(item, dict):
             continue
 
-        recommendation = score_recommendation(
-            item,
-            interest_list,
-        )
-
+        recommendation = score_recommendation(item, interest_list)
         recommendation["category"] = category
         scored_recommendations.append(recommendation)
 
-    # Exclude weak matches before ranking.
     recommendations = [
-        item
-        for item in scored_recommendations
+        item for item in scored_recommendations
         if item["match_score"] >= MIN_MATCH_SCORE
     ]
 
-    # Highest score first; input order is preserved for ties.
     recommendations.sort(
         key=lambda item: item["match_score"],
         reverse=True,
@@ -361,7 +346,7 @@ def create_recommendation_request(
     else:
         message = (
             "No recommendations met the minimum relevance score. "
-            "Try a different interest or a more specific query."
+            "Try another interest or a more specific query."
         )
         status = "no_results"
 
