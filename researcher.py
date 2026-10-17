@@ -381,7 +381,7 @@ def search_tag(query: str, category: str) -> list[dict]:
         elif query_text in name or name in query_text:
             partial.append(tag)
 
-    return (exact + partial + candidates)[:5]
+    return (exact + partial)[:5]
 
 
 def search_entity(query: str, category: str) -> list[dict]:
