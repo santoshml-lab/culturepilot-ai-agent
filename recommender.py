@@ -1181,7 +1181,7 @@ def create_recommendation_request(
             "Try a more specific or alternative search phrase."
         ),
         "source": "Qloo",
-            }
+    }
 
 
 
