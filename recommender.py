@@ -926,8 +926,10 @@ def score_recommendation(
         return None
 
     matched_interests, raw_score, matched_phrases = (
-        match_interests(interests, metadata)
+    match_interests(interests, metadata, category)
     )
+        
+    
 
     if not matched_interests or raw_score < 60:
         return None
