@@ -653,9 +653,24 @@ def category_confirmed(category: str, metadata: dict) -> bool:
         if "artist" in entity_type or "music" in entity_type:
             return True
 
-    if category_name == "Travel":
-        if "destination" in entity_type:
+  c if category_name == "Travel":
+        travel_types = (
+            "destination",
+            "place",
+            "point_of_interest",
+            "locality",
+            "city",
+            "country",
+            "region",
+            "tourist_attraction",
+            "landmark",
+            "national_park",
+        )
+
+        if any(travel_type in entity_type for travel_type in travel_types):
             return True
+        
+            
 
     if category_name == "Food":
         food_evidence = [
