@@ -791,6 +791,26 @@ def create_recommendation_request(
         if entity_key in seen_ids:
             continue
 
+        
+        metadata = get_entity_metadata(entity)
+        category_ok = category_confirmed(category_name, metadata)
+        matched, match_score, matched_terms = match_interests(
+    interests, metadata
+)
+
+print(
+    "[MUSIC DEBUG]",
+    {
+        "title": metadata.get("title"),
+        "entity_type": metadata.get("entity_type"),
+        "category_ok": category_ok,
+        "matched_interests": matched,
+        "match_score": match_score,
+        "genres": metadata.get("genres"),
+    }
+)
+
+
         recommendation = score_recommendation(
             entity=entity,
             interests=interests,
