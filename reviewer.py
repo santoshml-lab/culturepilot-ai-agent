@@ -8,6 +8,7 @@ def review_recommendations(recommendation_result: dict) -> dict:
             "review_status": "rejected",
             "reason": "Recommendation response must be an object.",
             "recommendations": [],
+            "rejected_count": 0,
         }
 
     recommendations = recommendation_result.get(
@@ -20,6 +21,7 @@ def review_recommendations(recommendation_result: dict) -> dict:
             "review_status": "rejected",
             "reason": "Recommendations must be a list.",
             "recommendations": [],
+            "rejected_count": 0,
         }
 
     if not recommendations:
@@ -31,6 +33,7 @@ def review_recommendations(recommendation_result: dict) -> dict:
                 "Check the Qloo research response."
             ),
             "recommendations": [],
+            "rejected_count": 0,
         }
 
     approved_items = []
@@ -42,21 +45,32 @@ def review_recommendations(recommendation_result: dict) -> dict:
             continue
 
         title = str(item.get("title") or "").strip()
-        entity_id = str(item.get("entity_id") or "").strip()
-        source = str(item.get("source") or "").strip()
-        method = str(
-            item.get("recommendation_method") or ""
-        ).strip()
-        score = item.get("match_score")
 
+        entity_id = str(
+            item.get("entity_id") or item.get("id") or ""
+        ).strip()
+
+        source = str(item.get("source") or "").strip()
+
+        # Support both the current and older score field names.
+        score = item.get("score")
+
+        if score is None:
+            score = item.get("match_score")
+
+        matched_interests = item.get("matched_interests", [])
+
+        # 1. Essential identity fields
         if not title or not entity_id:
             rejected_count += 1
             continue
 
+        # 2. Verify recommendation source
         if source.casefold() != "qloo":
             rejected_count += 1
             continue
 
+        # 3. Verify numerical score
         if (
             not isinstance(score, (int, float))
             or isinstance(score, bool)
@@ -65,16 +79,26 @@ def review_recommendations(recommendation_result: dict) -> dict:
             rejected_count += 1
             continue
 
-        # Permit direct metadata matches and results returned
-        # by Qloo's cultural insight endpoint.
-        if method not in {
-            "metadata_match",
-            "qloo_cultural_insight",
-        }:
+        # 4. Require evidence that interests were matched
+        if (
+            not isinstance(matched_interests, list)
+            or not matched_interests
+            or not any(
+                isinstance(interest, str) and interest.strip()
+                for interest in matched_interests
+            )
+        ):
             rejected_count += 1
             continue
 
-        approved_items.append(item)
+        # Keep the original recommendation fields intact.
+        approved_item = dict(item)
+
+        # Normalize identity and score fields for downstream use.
+        approved_item["entity_id"] = entity_id
+        approved_item["score"] = score
+
+        approved_items.append(approved_item)
 
     if not approved_items:
         return {
@@ -82,7 +106,8 @@ def review_recommendations(recommendation_result: dict) -> dict:
             "review_status": "rejected",
             "reason": (
                 "No recommendations passed validation. "
-                "Check entity IDs, source and scoring fields."
+                "Check title, entity ID, Qloo source, score "
+                "and matched interests."
             ),
             "recommendations": [],
             "rejected_count": rejected_count,
@@ -95,10 +120,12 @@ def review_recommendations(recommendation_result: dict) -> dict:
             f"{len(approved_items)} recommendations passed review."
             + (
                 f" {rejected_count} invalid items were excluded."
-                if rejected_count else ""
+                if rejected_count
+                else ""
             )
         ),
         "recommendations": approved_items,
         "rejected_count": rejected_count,
     }
+
 
