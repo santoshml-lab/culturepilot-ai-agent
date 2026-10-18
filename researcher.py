@@ -385,7 +385,7 @@ def search_tag(query: str, category: str) -> list[dict]:
     flush=True,
 )
 
-return selected_tags
+    return selected_tags
 
     return (exact + partial)[:5]
 
