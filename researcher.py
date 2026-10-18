@@ -1,3 +1,4 @@
+
 import os
 import re
 import logging
@@ -11,16 +12,66 @@ QLOO_BASE_URL = "https://hackathon.api.qloo.com"
 TIMEOUT = 35
 RESULT_LIMIT = 10
 
-CATEGORY_TYPES = {
+# Entity type used to find the user's starting interest.
+SEARCH_TYPES = {
+    "Movies": "urn:entity:movie",
+    "Music": "urn:entity:artist",
+    "Food": "urn:entity:place",
+    "Travel": "urn:entity:destination",
+}
+
+# Entity type used for recommendations.
+INSIGHT_TYPES = {
     "Movies": "urn:entity:movie",
     "Music": "urn:entity:artist",
     "Food": "urn:entity:place",
     "Travel": "urn:entity:place",
 }
 
+# Country codes supported by Qloo's geocode filter.
+COUNTRY_CODES = {
+    "japan": "JP",
+    "india": "IN",
+    "france": "FR",
+    "italy": "IT",
+    "thailand": "TH",
+    "indonesia": "ID",
+    "china": "CN",
+    "south korea": "KR",
+    "korea": "KR",
+    "usa": "US",
+    "united states": "US",
+    "america": "US",
+    "uk": "GB",
+    "united kingdom": "GB",
+    "england": "GB",
+    "australia": "AU",
+    "spain": "ES",
+    "germany": "DE",
+    "singapore": "SG",
+    "malaysia": "MY",
+    "nepal": "NP",
+    "sri lanka": "LK",
+    "vietnam": "VN",
+    "turkey": "TR",
+    "turkiye": "TR",
+    "greece": "GR",
+    "switzerland": "CH",
+    "canada": "CA",
+    "mexico": "MX",
+    "brazil": "BR",
+    "new zealand": "NZ",
+    "portugal": "PT",
+    "netherlands": "NL",
+    "ireland": "IE",
+    "egypt": "EG",
+    "uae": "AE",
+    "united arab emirates": "AE",
+    "south africa": "ZA",
+}
+
 
 def normalize_text(value: Any) -> str:
-    """Convert a value to normalized searchable text."""
     if value is None:
         return ""
 
@@ -31,7 +82,6 @@ def normalize_text(value: Any) -> str:
 
 
 def split_interests(interests: Any) -> list[str]:
-    """Convert user interests into a list of search phrases."""
     if isinstance(interests, str):
         values = re.split(r"[,;\n]+", interests)
     elif isinstance(interests, (list, tuple, set)):
@@ -58,7 +108,6 @@ def split_interests(interests: Any) -> list[str]:
 
 
 def detect_category(category: Any) -> str:
-    """Normalize a category supplied by the frontend."""
     value = normalize_text(category).casefold()
 
     aliases = {
@@ -84,7 +133,6 @@ def detect_category(category: Any) -> str:
 
 
 def qloo_headers() -> dict[str, str]:
-    """Build authenticated Qloo request headers."""
     api_key = os.getenv("QLOO_API_KEY", "").strip()
 
     if not api_key:
@@ -102,7 +150,6 @@ def qloo_get(
     endpoint: str,
     params: dict[str, Any],
 ) -> dict[str, Any]:
-    """Make a safe GET request to the Qloo API."""
     url = f"{QLOO_BASE_URL.rstrip('/')}/{endpoint.lstrip('/')}"
 
     response = requests.get(
@@ -128,19 +175,24 @@ def qloo_get(
         ) from exc
 
     if not isinstance(payload, dict):
-        raise RuntimeError("Qloo returned an unexpected response format.")
+        raise RuntimeError(
+            "Qloo returned an unexpected response format."
+        )
 
     return payload
 
 
 def extract_entities(payload: Any) -> list[dict[str, Any]]:
-    """Extract entity dictionaries from common Qloo response shapes."""
     if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
+        return [
+            item for item in payload
+            if isinstance(item, dict)
+        ]
 
     if not isinstance(payload, dict):
         return []
 
+    # Qloo responses may wrap results in nested objects.
     for key in ("results", "entities", "items", "data"):
         value = payload.get(key)
 
@@ -159,10 +211,10 @@ def extract_entities(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def get_entity_properties(entity: dict[str, Any]) -> dict[str, Any]:
-    """Read entity properties without assuming one response shape."""
+def get_entity_properties(
+    entity: dict[str, Any],
+) -> dict[str, Any]:
     properties = entity.get("properties", {})
-
     return properties if isinstance(properties, dict) else {}
 
 
@@ -193,7 +245,6 @@ def entity_name(entity: dict[str, Any]) -> str:
 
 
 def entity_text(entity: dict[str, Any]) -> str:
-    """Create text useful for deduplication and filtering."""
     properties = get_entity_properties(entity)
 
     parts = [
@@ -218,13 +269,14 @@ def entity_text(entity: dict[str, Any]) -> str:
         if value:
             parts.append(normalize_text(value))
 
-    return " ".join(part for part in parts if part).casefold()
+    return " ".join(
+        part for part in parts if part
+    ).casefold()
 
 
 def filter_food_entities(
     entities: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Keep food-related place results when their type is known."""
     food_terms = (
         "restaurant",
         "food",
@@ -243,12 +295,17 @@ def filter_food_entities(
         properties = get_entity_properties(entity)
 
         description = " ".join(
-            normalize_text(properties.get(key, entity.get(key)))
-            for key in ("type", "subtype", "category", "description")
+            normalize_text(
+                properties.get(key, entity.get(key))
+            )
+            for key in (
+                "type",
+                "subtype",
+                "category",
+                "description",
+            )
         ).casefold()
 
-        # Keep results if Qloo has not provided enough metadata
-        # to classify the place reliably.
         if not description.strip() or any(
             term in description for term in food_terms
         ):
@@ -261,7 +318,6 @@ def search_tag(
     phrase: str,
     category: str,
 ) -> list[dict[str, Any]]:
-    """Search Qloo tags for a phrase."""
     try:
         payload = qloo_get(
             "/v2/tags",
@@ -271,7 +327,11 @@ def search_tag(
             },
         )
         return extract_entities(payload)
-    except (requests.RequestException, RuntimeError) as exc:
+
+    except (
+        requests.RequestException,
+        RuntimeError,
+    ) as exc:
         logger.info("Qloo tag search unavailable: %s", exc)
         return []
 
@@ -280,8 +340,7 @@ def search_entity(
     phrase: str,
     category: str,
 ) -> list[dict[str, Any]]:
-    """Search Qloo entities using the selected category."""
-    entity_type = CATEGORY_TYPES.get(category)
+    entity_type = SEARCH_TYPES.get(category)
 
     if not entity_type:
         return []
@@ -301,9 +360,9 @@ def search_entity(
 def get_insights(
     category: str,
     entities: list[dict[str, Any]],
+    interests: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Request related recommendations from Qloo Insights."""
-    entity_type = CATEGORY_TYPES.get(category)
+    entity_type = INSIGHT_TYPES.get(category)
 
     if not entity_type:
         return []
@@ -319,23 +378,56 @@ def get_insights(
     if not ids:
         return []
 
-    payload = qloo_get(
-        "/v2/insights",
-        {
-            "filter.type": entity_type,
-            "signal.interests.entities": ",".join(ids[:3]),
-            "take": RESULT_LIMIT,
-        },
+    params: dict[str, Any] = {
+        "filter.type": entity_type,
+        "signal.interests.entities": ",".join(ids[:3]),
+        "take": RESULT_LIMIT,
+    }
+
+    # Restrict travel recommendations to the requested country
+    # whenever the interest maps to a known country code.
+    if category == "Travel":
+        phrases = interests or []
+        country_code = None
+
+        for phrase in phrases:
+            key = normalize_text(phrase).casefold()
+
+            if key in COUNTRY_CODES:
+                country_code = COUNTRY_CODES[key]
+                break
+
+        if country_code:
+            params["filter.geocode.country_code"] = country_code
+            logger.info(
+                "Travel Insights country filter enabled: %s",
+                country_code,
+            )
+        else:
+            # Do not request broad global place recommendations
+            # when the country cannot be safely identified.
+            logger.info(
+                "Travel country code not recognized; "
+                "skipping unrestricted Insights."
+            )
+            return []
+
+    payload = qloo_get("/v2/insights", params)
+    results = extract_entities(payload)
+
+    logger.info(
+        "Qloo Insights: category=%s count=%d",
+        category,
+        len(results),
     )
 
-    return extract_entities(payload)
+    return results
 
 
 def log_entity_diagnostics(
     entities: list[dict[str, Any]],
     category: str,
 ) -> None:
-    """Log result counts without exposing API credentials."""
     logger.info(
         "CulturePilot research: category=%s result_count=%d",
         category,
@@ -347,11 +439,6 @@ def research_cultural_data(
     interests: Any,
     category: str,
 ) -> dict[str, Any]:
-    """
-    Research cultural interests using Qloo search and insights.
-
-    Returns a dictionary for the existing backend workflow.
-    """
     normalized_category = detect_category(category)
     phrases = split_interests(interests)
 
@@ -379,11 +466,11 @@ def research_cultural_data(
             "message": "Please provide at least one interest.",
         }
 
-    collected = []
-    methods = []
-    seen_ids = set()
-    seen_names = set()
-    errors = []
+    collected: list[dict[str, Any]] = []
+    methods: list[str] = []
+    seen_ids: set[str] = set()
+    seen_names: set[str] = set()
+    errors: list[str] = []
 
     def add_results(items: list[dict[str, Any]]) -> None:
         for item in items:
@@ -399,9 +486,10 @@ def research_cultural_data(
                 else name.casefold()
             )
 
-            if dedup_key in seen_ids or (
-                name and name.casefold() in seen_names
-            ):
+            if dedup_key in seen_ids:
+                continue
+
+            if name and name.casefold() in seen_names:
                 continue
 
             seen_ids.add(dedup_key)
@@ -424,24 +512,93 @@ def research_cultural_data(
                 normalized_category,
             )
 
-            if entities:
-                methods.append("entity_search")
+            logger.info(
+                "Qloo entity search: category=%s phrase=%s count=%d",
+                normalized_category,
+                phrase,
+                len(entities),
+            )
 
-                if normalized_category == "Food":
-                    entities = filter_food_entities(entities)
+            if not entities:
+                continue
 
-                insights = get_insights(
-                    normalized_category,
-                    entities[:3],
-                )
+            methods.append("entity_search")
 
-                if insights:
-                    methods.append("entity_insights")
-                    add_results(insights)
+            if normalized_category == "Food":
+                entities = filter_food_entities(entities)
 
-                # Search results are a fallback for categories other
-                # than Travel. Travel must avoid unverified locations.
-                elif normalized_category != "Travel":
+            # Keep direct destination search results only if their
+            # names actually match the requested travel interest.
+            if normalized_category == "Travel":
+                phrase_key = phrase.casefold()
+
+                matching_destinations = [
+                    entity for entity in entities
+                    if entity_name(entity).casefold() == phrase_key
+                ]
+
+                try:
+                    insights = get_insights(
+                        normalized_category,
+                        entities[:3],
+                        interests=[phrase],
+                    )
+
+                    if insights:
+                        methods.append("entity_insights")
+                        add_results(insights)
+                    else:
+                        logger.info(
+                            "No country-filtered travel insights "
+                            "for interest=%s",
+                            phrase,
+                        )
+
+                except (
+                    requests.RequestException,
+                    RuntimeError,
+                    ValueError,
+                ) as exc:
+                    logger.warning(
+                        "Travel Insights failed for %s: %s",
+                        phrase,
+                        type(exc).__name__,
+                    )
+                    errors.append(type(exc).__name__)
+
+                # A matched country entity is a safe fallback,
+                # unlike unrelated attractions from another country.
+                if not collected and matching_destinations:
+                    add_results(matching_destinations)
+                    if matching_destinations:
+                        methods.append("destination_search_fallback")
+
+            else:
+                try:
+                    insights = get_insights(
+                        normalized_category,
+                        entities[:3],
+                        interests=[phrase],
+                    )
+
+                    if insights:
+                        methods.append("entity_insights")
+                        add_results(insights)
+                    else:
+                        # Preserve the existing non-travel fallback.
+                        add_results(entities)
+
+                except (
+                    requests.RequestException,
+                    RuntimeError,
+                    ValueError,
+                ) as exc:
+                    logger.warning(
+                        "Qloo Insights failed for %s: %s",
+                        phrase,
+                        type(exc).__name__,
+                    )
+                    errors.append(type(exc).__name__)
                     add_results(entities)
 
         except (
@@ -450,8 +607,9 @@ def research_cultural_data(
             ValueError,
         ) as exc:
             logger.warning(
-                "Qloo research failed for one search phrase: %s",
-                exc,
+                "Qloo entity search failed for %s: %s",
+                phrase,
+                type(exc).__name__,
             )
             errors.append(type(exc).__name__)
             continue
@@ -471,7 +629,7 @@ def research_cultural_data(
         status = "empty"
         message = (
             "No suitable results were returned. "
-            "Try a more specific interest."
+            "Try a supported country or a more specific interest."
         )
 
     return {
@@ -483,7 +641,8 @@ def research_cultural_data(
         "retrieval_method": list(dict.fromkeys(methods)),
         "results": collected[:RESULT_LIMIT],
         "message": message,
-        }
+    }
+
 
 
 
