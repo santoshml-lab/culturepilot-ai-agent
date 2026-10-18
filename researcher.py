@@ -4,7 +4,6 @@ import re
 import logging
 from typing import Any
 
-
 import requests
 
 logger = logging.getLogger(__name__)
@@ -41,51 +40,31 @@ CATEGORY_ALIASES = {
 }
 
 FOOD_TERMS = {
-    "food",
-    "restaurant",
-    "restaurants",
-    "cuisine",
-    "cuisines",
-    "dish",
-    "dishes",
-    "street food",
-    "indian food",
-    "italian food",
-    "chinese food",
-    "japanese food",
-    "thai food",
-    "mexican food",
-    "korean food",
-    "cafe",
-    "cafes",
-    "coffee",
-    "pizza",
-    "burger",
-    "biryani",
-    "sushi",
-    "dessert",
-    "desserts",
-    "bakery",
+    "food", "restaurant", "restaurants", "cuisine", "cuisines",
+    "dish", "dishes", "street food", "indian food", "italian food",
+    "chinese food", "japanese food", "thai food", "mexican food",
+    "korean food", "cafe", "cafes", "coffee", "pizza", "burger",
+    "biryani", "sushi", "dessert", "desserts", "bakery",
     "bakery items",
 }
 
 CATEGORY_KEYWORDS = {
     "Movies": {
-        "movie", "film", "cinema", "director", "actor",
-        "actress", "science fiction", "sci-fi", "thriller",
-        "drama", "comedy", "horror", "animation",
+        "movie", "film", "cinema", "director", "actor", "actress",
+        "science fiction", "sci-fi", "thriller", "drama", "comedy",
+        "horror", "animation",
     },
     "Music": {
-        "music", "song", "songs", "artist", "singer",
-        "classical", "indian classical", "hindustani",
-        "carnatic", "raga", "relaxing music", "ambient",
-        "rock", "pop", "jazz", "hip hop", "instrumental",
+        "music", "song", "songs", "artist", "singer", "classical",
+        "indian classical", "hindustani", "carnatic", "raga",
+        "relaxing music", "ambient", "rock", "pop", "jazz",
+        "hip hop", "instrumental",
     },
     "Food": FOOD_TERMS,
     "Travel": {
         "travel", "destination", "destinations", "tourism",
-        "holiday", "vacation", "adventure", "beach",
-        "mountain", "city", "museum", "nature",
+        "holiday", "vacation", "adventure", "beach", "mountain",
+        "city", "museum", "nature",
     },
 }
 
@@ -112,7 +91,7 @@ def normalize_text(value: Any) -> str:
 
 
 def split_interests(interests: Any) -> list[str]:
-    """Convert a comma-separated or list-based input into phrases."""
+    """Convert comma-separated or list-based interests into phrases."""
     if interests is None:
         return []
 
@@ -146,7 +125,10 @@ def detect_category(value: Any) -> str:
         return CATEGORY_ALIASES[normalized]
 
     for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(normalize_text(word) in normalized for word in keywords):
+        if any(
+            normalize_text(word) in normalized
+            for word in keywords
+        ):
             return category
 
     return "Movies"
@@ -156,9 +138,7 @@ def qloo_headers() -> dict[str, str]:
     """Create request headers without logging the API key."""
     api_key = os.getenv("QLOO_API_KEY", "").strip()
 
-    headers = {
-        "Accept": "application/json",
-    }
+    headers = {"Accept": "application/json"}
 
     if api_key:
         headers["X-Api-Key"] = api_key
@@ -167,7 +147,7 @@ def qloo_headers() -> dict[str, str]:
 
 
 def qloo_get(path: str, params: dict | None = None) -> dict:
-    """Make a Qloo request and safely handle HTTP/API errors."""
+    """Make a Qloo request and handle HTTP/API errors."""
     if not os.getenv("QLOO_API_KEY", "").strip():
         logger.error("QLOO_API_KEY environment variable is missing.")
         return {"_error": "missing_api_key"}
@@ -242,13 +222,9 @@ def extract_entities(data: Any) -> list[dict]:
 
 
 def get_entity_properties(entity: dict) -> dict:
-    """Read Qloo properties without assuming every field exists."""
+    """Read entity properties safely."""
     properties = entity.get("properties", {})
-
-    if isinstance(properties, dict):
-        return properties
-
-    return {}
+    return properties if isinstance(properties, dict) else {}
 
 
 def entity_text(entity: dict) -> str:
@@ -308,7 +284,7 @@ def get_food_metadata_text(entity: dict) -> str:
 
 
 def filter_food_entities(entities: list[dict]) -> list[dict]:
-    """Prefer likely food/place entities while retaining valid place results."""
+    """Prefer likely food/place entities."""
     filtered = []
 
     for entity in entities:
@@ -411,7 +387,7 @@ def get_insights(
     tags: list[dict] | None = None,
     entities: list[dict] | None = None,
 ) -> list[dict]:
-    """Request insights using Qloo tag/entity IDs."""
+    """Request Qloo insights using tag/entity IDs."""
     category_type = CATEGORY_TYPES.get(category)
 
     if not category_type:
@@ -454,7 +430,7 @@ def get_insights(
 
 
 def log_entity_diagnostics(entities: list[dict]) -> None:
-    """Log limited diagnostics for debugging retrieval and matching."""
+    """Log limited entity metadata for debugging."""
     for entity in entities[:10]:
         properties = get_entity_properties(entity)
 
@@ -471,11 +447,7 @@ def research_cultural_data(
     interests: Any,
     category: str,
 ) -> dict:
-    """
-    Retrieve cultural data for CulturePilot AI.
-
-    Keeps the existing function signature and return keys used by main.py.
-    """
+    """Retrieve cultural data while preserving main.py's return schema."""
     phrases = split_interests(interests)
 
     if category not in CATEGORY_TYPES:
@@ -517,36 +489,67 @@ def research_cultural_data(
         )
 
         tags = search_tag(phrase, category)
+        logger.info(
+            "QLOO TAG SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
+            category,
+            phrase,
+            len(tags),
+            [
+                tag.get("name") or tag.get("title") or tag.get("label")
+                for tag in tags[:10]
+            ],
+        )
 
         if tags:
             tag_results = get_insights(category, tags=tags)
+
+            logger.info(
+                "QLOO TAG INSIGHTS RESULTS: category=%s phrase=%s count=%s names=%s",
+                category,
+                phrase,
+                len(tag_results),
+                [
+                    item.get("name") or item.get("title")
+                    for item in tag_results[:10]
+                ],
+            )
 
             if tag_results:
                 methods.append("tag_insights")
                 collected.extend(tag_results)
 
-        # Search entities as a fallback when insights fail or return no data.
         search_results = search_entity(phrase, category)
+
         logger.info(
-        "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
-        category,
-        phrase,
-        len(search_results),
-    [
-        item.get("name") or item.get("title")
-        for item in search_results[:10]
-    ],
+            "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
+            category,
+            phrase,
+            len(search_results),
+            [
+                item.get("name") or item.get("title")
+                for item in search_results[:10]
+            ],
         )
 
         if search_results:
             methods.append("entity_search")
             collected.extend(search_results)
 
-            # Use actual entity IDs as an additional insights signal.
             if not tags:
                 insight_results = get_insights(
                     category,
                     entities=search_results[:3],
+                )
+
+                logger.info(
+                    "QLOO ENTITY INSIGHTS RESULTS: category=%s phrase=%s count=%s names=%s",
+                    category,
+                    phrase,
+                    len(insight_results),
+                    [
+                        item.get("name") or item.get("title")
+                        for item in insight_results[:10]
+                    ],
                 )
 
                 if insight_results:
@@ -583,7 +586,6 @@ def research_cultural_data(
     if category == "Food":
         food_results = filter_food_entities(unique_results)
 
-        # Avoid returning an empty list solely because metadata is sparse.
         if food_results:
             unique_results = food_results
 
@@ -623,6 +625,7 @@ def research_cultural_data(
             "Check Render logs for API errors and response details."
         ),
     }
+
 
 
 
