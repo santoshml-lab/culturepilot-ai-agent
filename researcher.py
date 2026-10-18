@@ -178,7 +178,7 @@ def qloo_get(path: str, params: dict | None = None) -> dict:
         try:
             payload = response.json()
         except ValueError:
-            logger.error("QLOO returned invalid JSON for %s", path)
+            logger.error("Qloo returned invalid JSON for %s", path)
             return {"_error": "invalid_json"}
 
         if not isinstance(payload, dict):
@@ -203,7 +203,10 @@ def extract_entities(data: Any) -> list[dict]:
     results = data.get("results", [])
 
     if isinstance(results, list):
-        return [item for item in results if isinstance(item, dict)]
+        return [
+            item for item in results
+            if isinstance(item, dict)
+        ]
 
     if isinstance(results, dict):
         for key in ("entities", "results", "items", "tags"):
@@ -217,7 +220,10 @@ def extract_entities(data: Any) -> list[dict]:
     for key in ("entities", "items", "tags"):
         value = data.get(key)
         if isinstance(value, list):
-            return [item for item in value if isinstance(item, dict)]
+            return [
+                item for item in value
+                if isinstance(item, dict)
+            ]
 
     return []
 
@@ -251,11 +257,13 @@ def entity_text(entity: dict) -> str:
         properties.get("subtype"),
     ]
 
-    return normalize_text(" ".join(
-        normalize_text(value)
-        for value in values
-        if value is not None
-    ))
+    return normalize_text(
+        " ".join(
+            normalize_text(value)
+            for value in values
+            if value is not None
+        )
+    )
 
 
 def get_food_metadata_text(entity: dict) -> str:
@@ -277,11 +285,13 @@ def get_food_metadata_text(entity: dict) -> str:
         properties.get("tags"),
     ]
 
-    return normalize_text(" ".join(
-        normalize_text(value)
-        for value in values
-        if value is not None
-    ))
+    return normalize_text(
+        " ".join(
+            normalize_text(value)
+            for value in values
+            if value is not None
+        )
+    )
 
 
 def filter_food_entities(entities: list[dict]) -> list[dict]:
@@ -315,7 +325,7 @@ def filter_food_entities(entities: list[dict]) -> list[dict]:
 
 
 def search_tag(query: str, category: str) -> list[dict]:
-    """Search Qloo tags for an interest phrase."""
+    """Search Qloo tags and prioritize category-relevant matches."""
     data = qloo_get(
         "/v2/tags",
         {
@@ -331,8 +341,10 @@ def search_tag(query: str, category: str) -> list[dict]:
 
     if not candidates:
         results = data.get("results", {})
+
         if isinstance(results, dict):
             tags = results.get("tags", [])
+
             if isinstance(tags, list):
                 candidates = [
                     item for item in tags
@@ -349,45 +361,61 @@ def search_tag(query: str, category: str) -> list[dict]:
             or tag.get("title")
             or tag.get("label")
         )
-        print(
-            "[QLOO TAG DEBUG]",
-           {
-         "query": query,
-        "name": tag.get("name") or tag.get("title") or tag.get("label"),
-        "id": tag.get("id"),
-        "tag_id": tag.get("tag_id"),
-        "entity_id": tag.get("entity_id"),
-          },
-          flush=True,
+
+        raw_tag_id = tag.get("id") or tag.get("tag_id") or ""
+        tag_id = normalize_text(raw_tag_id)
+
+        logger.info(
+            "QLOO TAG DEBUG: query=%s name=%s id=%s",
+            query,
+            name,
+            raw_tag_id,
         )
-
-
-        
 
         if not name:
             continue
+
+        # For Travel, exclude unrelated media, music,
+        # restaurant, and sports tags matching a country name.
+        if category == "Travel":
+            is_travel_tag = any(
+                marker in tag_id
+                for marker in (
+                    "destination",
+                    "travel",
+                    "tourism",
+                )
+            )
+
+            if not is_travel_tag:
+                continue
 
         if name == query_text:
             exact.append(tag)
         elif query_text in name or name in query_text:
             partial.append(tag)
-            selected_tags = (exact + partial)[:5]
 
-            print(
-                "[QLOO SELECTED TAGS]",
-    [
-        {
-                "name": tag.get("name") or tag.get("title") or tag.get("label"),
-                "id": tag.get("id"),
-        }
-        for tag in selected_tags
-    ],
-    flush=True,
-)
+    # Exact matches come first, followed by relevant partial matches.
+    selected_tags = (exact + partial)[:5]
+
+    logger.info(
+        "QLOO SELECTED TAGS: category=%s query=%s tags=%s",
+        category,
+        query,
+        [
+            {
+                "name": (
+                    tag.get("name")
+                    or tag.get("title")
+                    or tag.get("label")
+                ),
+                "id": tag.get("id") or tag.get("tag_id"),
+            }
+            for tag in selected_tags
+        ],
+    )
 
     return selected_tags
-
-    return (exact + partial)[:5]
 
 
 def search_entity(query: str, category: str) -> list[dict]:
@@ -423,18 +451,23 @@ def get_insights(
     if not category_type:
         return []
 
-    tag_ids = list(dict.fromkeys(
-        str(tag.get("id"))
-        for tag in (tags or [])
-        if isinstance(tag, dict) and tag.get("id")
-    ))
+    tag_ids = list(
+        dict.fromkeys(
+            str(tag.get("id") or tag.get("tag_id"))
+            for tag in (tags or [])
+            if isinstance(tag, dict)
+            and (tag.get("id") or tag.get("tag_id"))
+        )
+    )
 
-    entity_ids = list(dict.fromkeys(
-        str(entity.get("entity_id") or entity.get("id"))
-        for entity in (entities or [])
-        if isinstance(entity, dict)
-        and (entity.get("entity_id") or entity.get("id"))
-    ))
+    entity_ids = list(
+        dict.fromkeys(
+            str(entity.get("entity_id") or entity.get("id"))
+            for entity in (entities or [])
+            if isinstance(entity, dict)
+            and (entity.get("entity_id") or entity.get("id"))
+        )
+    )
 
     params = {
         "filter.type": category_type,
@@ -477,7 +510,7 @@ def research_cultural_data(
     interests: Any,
     category: str,
 ) -> dict:
-    """Retrieve cultural data, prioritizing interest-based Qloo insights."""
+    """Retrieve cultural data, prioritizing interest-based insights."""
     phrases = split_interests(interests)
 
     if category not in CATEGORY_TYPES:
@@ -504,7 +537,9 @@ def research_cultural_data(
             "search_phrases": phrases,
             "retrieval_method": "none",
             "results": [],
-            "message": "QLOO_API_KEY is missing from the backend environment.",
+            "message": (
+                "QLOO_API_KEY is missing from the backend environment."
+            ),
         }
 
     collected = []
@@ -518,28 +553,30 @@ def research_cultural_data(
             phrase,
         )
 
-        # Step 1: Search for an interest tag.
+        # Step 1: Find tags related to the requested interest.
         tags = search_tag(phrase, category)
 
         logger.info(
-            "QLOO TAG SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
+            "QLOO TAG SEARCH RESULTS: category=%s phrase=%s "
+            "count=%s names=%s",
             category,
             phrase,
             len(tags),
             [
                 tag.get("name") or tag.get("title") or tag.get("label")
-                for tag in tags[:10]
+                for tag in tags
             ],
         )
 
-        # Step 2: If tags exist, prioritize their insights.
         tag_results = []
 
+        # Step 2: Use tag-based insights when relevant tags exist.
         if tags:
             tag_results = get_insights(category, tags=tags)
 
             logger.info(
-                "QLOO TAG INSIGHTS RESULTS: category=%s phrase=%s count=%s names=%s",
+                "QLOO TAG INSIGHTS RESULTS: category=%s phrase=%s "
+                "count=%s names=%s",
                 category,
                 phrase,
                 len(tag_results),
@@ -553,14 +590,13 @@ def research_cultural_data(
                 methods.append("tag_insights")
                 collected.extend(tag_results)
 
-        # Step 3: Only use entity search when tag insights
-        # did not return results. This avoids mixing broad
-        # entity-search results into successful tag insights.
+        # Step 3: Fall back to entity search if tag insights are empty.
         if not tag_results:
             search_results = search_entity(phrase, category)
 
             logger.info(
-                "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
+                "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s "
+                "count=%s names=%s",
                 category,
                 phrase,
                 len(search_results),
@@ -574,14 +610,14 @@ def research_cultural_data(
                 methods.append("entity_search")
                 collected.extend(search_results)
 
-                # Use entity-based insights as an additional fallback.
                 insight_results = get_insights(
                     category,
                     entities=search_results[:3],
                 )
 
                 logger.info(
-                    "QLOO ENTITY INSIGHTS RESULTS: category=%s phrase=%s count=%s names=%s",
+                    "QLOO ENTITY INSIGHTS RESULTS: category=%s phrase=%s "
+                    "count=%s names=%s",
                     category,
                     phrase,
                     len(insight_results),
@@ -595,7 +631,7 @@ def research_cultural_data(
                     methods.append("entity_insights")
                     collected.extend(insight_results)
 
-    # Step 4: Deduplicate returned entities.
+    # Step 4: Deduplicate the returned entities.
     unique_results = []
 
     for entity in collected:
@@ -623,7 +659,7 @@ def research_cultural_data(
         seen.add(key)
         unique_results.append(entity)
 
-    # Step 5: Preserve the existing Food filtering behavior.
+    # Step 5: Preserve existing Food filtering behavior.
     if category == "Food":
         food_results = filter_food_entities(unique_results)
 
@@ -668,6 +704,8 @@ def research_cultural_data(
             "Check Render logs for API errors and response details."
         ),
     }
+
+                
 
 
 
