@@ -16,7 +16,7 @@ CATEGORY_TYPES = {
     "Movies": "urn:entity:movie",
     "Music": "urn:entity:artist",
     "Food": "urn:entity:place",
-    "Travel": "urn:entity:destination",
+    "Travel": "urn:entity:place",
 }
 
 CATEGORY_ALIASES = {
