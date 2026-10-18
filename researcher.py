@@ -448,7 +448,7 @@ def research_cultural_data(
     interests: Any,
     category: str,
 ) -> dict:
-    """Retrieve cultural data while preserving main.py's return schema."""
+    """Retrieve cultural data, prioritizing interest-based Qloo insights."""
     phrases = split_interests(interests)
 
     if category not in CATEGORY_TYPES:
@@ -489,7 +489,9 @@ def research_cultural_data(
             phrase,
         )
 
+        # Step 1: Search for an interest tag.
         tags = search_tag(phrase, category)
+
         logger.info(
             "QLOO TAG SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
             category,
@@ -500,6 +502,9 @@ def research_cultural_data(
                 for tag in tags[:10]
             ],
         )
+
+        # Step 2: If tags exist, prioritize their insights.
+        tag_results = []
 
         if tags:
             tag_results = get_insights(category, tags=tags)
@@ -519,24 +524,28 @@ def research_cultural_data(
                 methods.append("tag_insights")
                 collected.extend(tag_results)
 
-        search_results = search_entity(phrase, category)
+        # Step 3: Only use entity search when tag insights
+        # did not return results. This avoids mixing broad
+        # entity-search results into successful tag insights.
+        if not tag_results:
+            search_results = search_entity(phrase, category)
 
-        logger.info(
-            "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
-            category,
-            phrase,
-            len(search_results),
-            [
-                item.get("name") or item.get("title")
-                for item in search_results[:10]
-            ],
-        )
+            logger.info(
+                "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
+                category,
+                phrase,
+                len(search_results),
+                [
+                    item.get("name") or item.get("title")
+                    for item in search_results[:10]
+                ],
+            )
 
-        if search_results:
-            methods.append("entity_search")
-            collected.extend(search_results)
+            if search_results:
+                methods.append("entity_search")
+                collected.extend(search_results)
 
-            if not tags:
+                # Use entity-based insights as an additional fallback.
                 insight_results = get_insights(
                     category,
                     entities=search_results[:3],
@@ -557,6 +566,7 @@ def research_cultural_data(
                     methods.append("entity_insights")
                     collected.extend(insight_results)
 
+    # Step 4: Deduplicate returned entities.
     unique_results = []
 
     for entity in collected:
@@ -584,6 +594,7 @@ def research_cultural_data(
         seen.add(key)
         unique_results.append(entity)
 
+    # Step 5: Preserve the existing Food filtering behavior.
     if category == "Food":
         food_results = filter_food_entities(unique_results)
 
@@ -602,7 +613,8 @@ def research_cultural_data(
             "search_phrases": phrases,
             "retrieval_method": (
                 ",".join(dict.fromkeys(methods))
-                if methods else "fallback_search"
+                if methods
+                else "fallback_search"
             ),
             "results": unique_results,
             "message": (
@@ -618,7 +630,8 @@ def research_cultural_data(
         "search_phrases": phrases,
         "retrieval_method": (
             ",".join(dict.fromkeys(methods))
-            if methods else "none"
+            if methods
+            else "none"
         ),
         "results": [],
         "message": (
@@ -626,6 +639,13 @@ def research_cultural_data(
             "Check Render logs for API errors and response details."
         ),
     }
+
+
+
+
+
+
+    
 
 
 
