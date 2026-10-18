@@ -7,6 +7,7 @@ from typing import Any
 import requests
 
 
+
 logger = logging.getLogger(__name__)
 
 QLOO_BASE_URL = "https://hackathon.api.qloo.com"
