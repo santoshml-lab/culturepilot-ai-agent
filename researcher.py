@@ -448,9 +448,9 @@ def research_cultural_data(
         # This is particularly important for Travel destinations.
         entities = search_entity(phrase, category)
 
+        
         if entities:
             methods.append("entity_search")
-            collected.extend(entities)
 
             insights = get_insights(
                 category,
@@ -460,6 +460,11 @@ def research_cultural_data(
             if insights:
                 methods.append("entity_insights")
                 collected.extend(insights)
+
+            elif category != "Travel":
+                collected.extend(entities)
+i
+            
 
         # Tags can provide additional signals for non-Travel categories.
         # For Travel, don't let ambiguous country-name tags drive results.
