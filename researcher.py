@@ -349,6 +349,10 @@ def search_tag(query: str, category: str) -> list[dict]:
             or tag.get("title")
             or tag.get("label")
         )
+        logger.info("QLOO RAW TAG: %s", tag)
+
+
+        
 
         if not name:
             continue
