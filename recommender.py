@@ -1,3 +1,4 @@
+
 import re
 from difflib import SequenceMatcher
 from typing import Any
@@ -95,127 +96,48 @@ INTEREST_SYNONYMS = {
     ],
 }
 
-# Known franchises are used only to improve diversity.
-# They do not determine whether a recommendation is relevant.
 MOVIE_FRANCHISES = {
-    "star trek": [
-        "star trek",
-    ],
-    "star wars": [
-        "star wars",
-    ],
+    "star trek": ["star trek"],
+    "star wars": ["star wars"],
     "marvel": [
-        "marvel cinematic universe",
-        "marvel studios",
-        "avengers",
-        "iron man",
-        "captain america",
-        "thor",
-        "guardians of the galaxy",
-        "ant man",
-        "doctor strange",
-        "black panther",
-        "spider man",
-        "spider-man",
+        "marvel cinematic universe", "marvel studios",
+        "avengers", "iron man", "captain america", "thor",
+        "guardians of the galaxy", "ant man", "doctor strange",
+        "black panther", "spider man", "spider-man",
     ],
     "dc": [
-        "dc comics",
-        "dc extended universe",
-        "batman",
-        "superman",
-        "wonder woman",
-        "aquaman",
-        "justice league",
+        "dc comics", "dc extended universe", "batman",
+        "superman", "wonder woman", "aquaman", "justice league",
     ],
-    "jurassic": [
-        "jurassic park",
-        "jurassic world",
-    ],
-    "planet of the apes": [
-        "planet of the apes",
-    ],
-    "alien": [
-        "alien",
-        "aliens",
-    ],
-    "predator": [
-        "predator",
-    ],
-    "terminator": [
-        "terminator",
-    ],
-    "the matrix": [
-        "the matrix",
-    ],
-    "avatar": [
-        "avatar",
-    ],
-    "transformers": [
-        "transformers",
-    ],
-    "men in black": [
-        "men in black",
-    ],
-    "back to the future": [
-        "back to the future",
-    ],
-    "ghostbusters": [
-        "ghostbusters",
-    ],
-    "mad max": [
-        "mad max",
-    ],
-    "blade runner": [
-        "blade runner",
-    ],
-    "dune": [
-        "dune",
-    ],
-    "the hunger games": [
-        "the hunger games",
-    ],
-    "divergent": [
-        "divergent",
-    ],
-    "maze runner": [
-        "maze runner",
-    ],
-    "resident evil": [
-        "resident evil",
-    ],
-    "robocop": [
-        "robocop",
-    ],
-    "x-men": [
-        "x men",
-        "x-men",
-    ],
-    "mission impossible": [
-        "mission impossible",
-    ],
-    "fast and furious": [
-        "fast and furious",
-        "fast furious",
-    ],
-    "godzilla": [
-        "godzilla",
-    ],
-    "king kong": [
-        "king kong",
-    ],
-    "toy story": [
-        "toy story",
-    ],
-    "shrek": [
-        "shrek",
-    ],
-    "how to train your dragon": [
-        "how to train your dragon",
-    ],
+    "jurassic": ["jurassic park", "jurassic world"],
+    "planet of the apes": ["planet of the apes"],
+    "alien": ["alien", "aliens"],
+    "predator": ["predator"],
+    "terminator": ["terminator"],
+    "the matrix": ["the matrix"],
+    "avatar": ["avatar"],
+    "transformers": ["transformers"],
+    "men in black": ["men in black"],
+    "back to the future": ["back to the future"],
+    "ghostbusters": ["ghostbusters"],
+    "mad max": ["mad max"],
+    "blade runner": ["blade runner"],
+    "dune": ["dune"],
+    "the hunger games": ["the hunger games"],
+    "divergent": ["divergent"],
+    "maze runner": ["maze runner"],
+    "resident evil": ["resident evil"],
+    "robocop": ["robocop"],
+    "x-men": ["x men", "x-men"],
+    "mission impossible": ["mission impossible"],
+    "fast and furious": ["fast and furious", "fast furious"],
+    "godzilla": ["godzilla"],
+    "king kong": ["king kong"],
+    "toy story": ["toy story"],
+    "shrek": ["shrek"],
+    "how to train your dragon": ["how to train your dragon"],
 }
 
-# These labels are used for ranking diversity, not as proof
-# that an entity actually offers a particular dish.
 FOOD_DIVERSITY_GROUPS = {
     "chaat": [
         "chaat", "aloo tikki", "papdi chaat",
@@ -264,6 +186,61 @@ FOOD_RESTAURANT_TERMS = {
     "restaurant", "restaurants", "cafe", "cafes",
     "eatery", "eateries", "food court",
     "diner", "food outlet",
+}
+
+# Known aliases help validate specific destinations.
+# These are not a substitute for Qloo's actual location metadata.
+TRAVEL_DESTINATION_ALIASES = {
+    "japan": [
+        "japan", "japanese", "tokyo", "kyoto", "osaka",
+        "mount fuji", "hokkaido", "okinawa", "nara",
+        "hiroshima",
+    ],
+    "india": [
+        "india", "indian", "delhi", "mumbai", "jaipur",
+        "agra", "goa", "kerala", "varanasi",
+    ],
+    "france": [
+        "france", "french", "paris", "nice", "lyon",
+    ],
+    "italy": [
+        "italy", "italian", "rome", "venice", "florence",
+    ],
+    "thailand": [
+        "thailand", "thai", "bangkok", "phuket", "chiang mai",
+    ],
+    "indonesia": [
+        "indonesia", "indonesian", "bali", "jakarta",
+    ],
+    "china": [
+        "china", "chinese", "beijing", "shanghai", "xian",
+    ],
+    "south korea": [
+        "south korea", "korean", "seoul", "busan",
+    ],
+    "united states": [
+        "united states", "usa", "america", "new york",
+        "los angeles", "san francisco", "chicago",
+    ],
+    "united kingdom": [
+        "united kingdom", "britain", "england",
+        "london", "edinburgh",
+    ],
+    "australia": [
+        "australia", "australian", "sydney", "melbourne",
+    ],
+    "spain": [
+        "spain", "spanish", "madrid", "barcelona",
+    ],
+}
+
+TRAVEL_THEMES = {
+    "travel", "tourism", "vacation", "holiday",
+    "nature", "nature and adventure", "adventure",
+    "cultural heritage", "history", "culture",
+    "beach", "beaches", "mountains", "hiking",
+    "wildlife", "sightseeing", "national parks",
+    "road trips", "city breaks",
 }
 
 
@@ -540,6 +517,14 @@ def get_entity_metadata(entity: dict) -> dict:
     metadata_text = " ".join(metadata_parts)
     entity_type = get_field(entity, "entity_type", "type")
 
+    # Keep location fields separate so a destination name appearing
+    # incidentally in a long description cannot validate a venue.
+    location_text = normalize(get_text(
+        entity,
+        "location", "address", "country", "region",
+        "city", "destination",
+    ))
+
     all_text = normalize(" ".join([
         title, description, metadata_text, entity_type
     ]))
@@ -550,8 +535,67 @@ def get_entity_metadata(entity: dict) -> dict:
         "genres": get_genres(entity),
         "metadata": metadata_text,
         "entity_type": normalize(entity_type),
+        "location_text": location_text,
         "all_text": all_text,
     }
+
+
+def travel_destination_matches(interests: Any, metadata: dict) -> bool:
+    """
+    Validate specific destination requests against the result title
+    and explicit location fields. Generic travel themes are allowed
+    to proceed to normal relevance scoring.
+    """
+    phrases = split_interests(interests)
+
+    if not phrases:
+        return False
+
+    searchable = normalize(" ".join([
+        metadata.get("title", ""),
+        metadata.get("location_text", ""),
+    ]))
+
+    specific_destinations = []
+
+    for interest in phrases:
+        if interest in TRAVEL_THEMES:
+            continue
+
+        matched_aliases = None
+
+        for destination, aliases in TRAVEL_DESTINATION_ALIASES.items():
+            if (
+                interest == destination
+                or any(
+                    phrase_in_text(alias, interest)
+                    for alias in aliases
+                )
+            ):
+                matched_aliases = aliases
+                break
+
+        if matched_aliases is not None:
+            specific_destinations.append(matched_aliases)
+        else:
+            # Treat an unrecognized phrase as a requested location
+            # only when it isn't a generic travel theme.
+            specific_destinations.append([interest])
+
+    # If the query contains only broad themes, location matching
+    # isn't required; match_interests handles those requests.
+    if not specific_destinations:
+        return True
+
+    # Every requested specific destination must have evidence.
+    for aliases in specific_destinations:
+        if not any(
+            phrase_in_text(alias, searchable)
+            for alias in aliases
+        ):
+            return False
+
+    return True
 
 
 def match_interests(
@@ -674,13 +718,6 @@ def match_interests(
     )
 
 
-
-
-    
-    
-    
-
-
 def category_confirmed(category: str, metadata: dict) -> bool:
     """Check for evidence that an entity belongs to the category."""
     normalized_category = normalize(category)
@@ -709,22 +746,13 @@ def category_confirmed(category: str, metadata: dict) -> bool:
 
     if category_name == "Travel":
         travel_types = (
-            "destination",
-            "place",
-            "point_of_interest",
-            "locality",
-            "city",
-            "country",
-            "region",
-            "tourist_attraction",
-            "landmark",
-            "national_park",
+            "destination", "place", "point_of_interest",
+            "locality", "city", "country", "region",
+            "tourist_attraction", "landmark", "national_park",
         )
 
         if any(travel_type in entity_type for travel_type in travel_types):
             return True
-        
-            
 
     if category_name == "Food":
         food_evidence = [
@@ -754,10 +782,7 @@ def category_confirmed(category: str, metadata: dict) -> bool:
 
 
 def get_food_group(recommendation: dict) -> str:
-    """
-    Infer a food group only from evidence in available entity text.
-    Unknown entities remain in the general group.
-    """
+    """Infer a food group from available entity text."""
     searchable = normalize(" ".join([
         recommendation.get("title", ""),
         recommendation.get("description", ""),
@@ -772,37 +797,34 @@ def get_food_group(recommendation: dict) -> str:
     ]
 
     for group in priority:
-        terms = FOOD_DIVERSITY_GROUPS[group]
-
-        if any(phrase_in_text(term, searchable) for term in terms):
+        if any(
+            phrase_in_text(term, searchable)
+            for term in FOOD_DIVERSITY_GROUPS[group]
+        ):
             return group
 
     return "general"
 
 
 def get_movie_franchise(recommendation: dict) -> str:
-    """
-    Identify a known franchise from the available movie title
-    and description. Unknown movies are not forced into a franchise.
-    """
+    """Identify a known franchise from title and description."""
     searchable = normalize(" ".join([
         recommendation.get("title", ""),
         recommendation.get("description", ""),
     ]))
 
     for franchise, aliases in MOVIE_FRANCHISES.items():
-        for alias in aliases:
-            if phrase_in_text(alias, searchable):
-                return franchise
+        if any(
+            phrase_in_text(alias, searchable)
+            for alias in aliases
+        ):
+            return franchise
 
     return "standalone"
 
 
 def get_movie_diversity_group(recommendation: dict) -> str:
-    """
-    Estimate a broad movie style using available genres and text.
-    This is a diversity hint, not a definitive classification.
-    """
+    """Estimate a broad movie style from available text."""
     searchable = normalize(" ".join([
         recommendation.get("title", ""),
         recommendation.get("description", ""),
@@ -851,7 +873,10 @@ def get_movie_diversity_group(recommendation: dict) -> str:
     }
 
     for group, terms in genre_groups.items():
-        if any(phrase_in_text(term, searchable) for term in terms):
+        if any(
+            phrase_in_text(term, searchable)
+            for term in terms
+        ):
             return group
 
     return "general"
@@ -871,10 +896,7 @@ def get_dedup_text(recommendation: dict) -> str:
 
 
 def are_similar_titles(first: str, second: str) -> bool:
-    """
-    Detect exact and near-duplicate names.
-    Similarity is a heuristic, so short titles use stricter checks.
-    """
+    """Detect exact and near-duplicate names."""
     first = get_dedup_text({"title": first})
     second = get_dedup_text({"title": second})
 
@@ -907,7 +929,7 @@ def score_recommendation(
     interests: Any,
     category: str,
 ) -> dict | None:
-    """Score one Qloo entity and reject weak matches."""
+    """Score one Qloo entity and reject weak or unrelated matches."""
     if not isinstance(entity, dict):
         return None
 
@@ -925,11 +947,22 @@ def score_recommendation(
     if not category_confirmed(category, metadata):
         return None
 
-    matched_interests, raw_score, matched_phrases = (
-    match_interests(interests, metadata, category)
+    # NEW: validate specific Travel destinations before scoring.
+    if normalize(category) == "travel":
+        if not travel_destination_matches(interests, metadata):
+            print(
+                "[TRAVEL FILTER] Rejected unrelated destination:",
+                metadata.get("title"),
+                "Location:",
+                metadata.get("location_text"),
+                "Interests:",
+                interests,
+            )
+            return None
+
+    matched_interests, raw_score, matched_phrases = match_interests(
+        interests, metadata, category
     )
-        
-    
 
     if not matched_interests or raw_score < 60:
         return None
@@ -979,16 +1012,7 @@ def select_diverse_recommendations(
     category: str,
     limit: int = RESULT_LIMIT,
 ) -> list[dict]:
-    """
-    Greedy relevance-first selection with duplicate control.
-
-    Food: apply a soft penalty to repeated food groups.
-    Movies: apply soft penalties to repeated franchises and styles.
-
-    Diversity is a ranking hint. It never makes an unrelated entity
-    eligible, and the function can return fewer than limit results
-    when too few distinct candidates are available.
-    """
+    """Select relevant recommendations while avoiding duplicates."""
     if not candidates or limit <= 0:
         return []
 
@@ -1029,8 +1053,6 @@ def select_diverse_recommendations(
             if category == "Food":
                 group = item.get("diversity_group", "general")
                 repeat_count = food_group_counts.get(group, 0)
-
-                # Prefer other food groups when their relevance is close.
                 adjusted_score -= min(repeat_count * 18, 36)
 
             elif category == "Movies":
@@ -1041,20 +1063,13 @@ def select_diverse_recommendations(
                     "movie_diversity_group", "general"
                 )
 
-                # Standalone films are not treated as one shared franchise.
                 if franchise != "standalone":
-                    franchise_repeat_count = franchise_counts.get(
-                        franchise, 0
-                    )
-                    adjusted_score -= min(
-                        franchise_repeat_count * 24, 48
-                    )
+                    repeat_count = franchise_counts.get(franchise, 0)
+                    adjusted_score -= min(repeat_count * 24, 48)
 
                 style_repeat_count = movie_style_counts.get(style, 0)
                 if style != "general":
-                    adjusted_score -= min(
-                        style_repeat_count * 8, 16
-                    )
+                    adjusted_score -= min(style_repeat_count * 8, 16)
 
             if adjusted_score > best_adjusted_score:
                 best_item = item
@@ -1073,17 +1088,11 @@ def select_diverse_recommendations(
 
         if category == "Food":
             group = best_item.get("diversity_group", "general")
-            food_group_counts[group] = (
-                food_group_counts.get(group, 0) + 1
-            )
+            food_group_counts[group] = food_group_counts.get(group, 0) + 1
 
         elif category == "Movies":
-            franchise = best_item.get(
-                "movie_franchise", "standalone"
-            )
-            style = best_item.get(
-                "movie_diversity_group", "general"
-            )
+            franchise = best_item.get("movie_franchise", "standalone")
+            style = best_item.get("movie_diversity_group", "general")
 
             if franchise != "standalone":
                 franchise_counts[franchise] = (
@@ -1109,11 +1118,7 @@ def create_recommendation_request(
     plan: Any = None,
     cultural_data: Any = None,
 ) -> dict:
-    """
-    Create relevance-ranked, diversity-aware recommendations.
-
-    Keeps the function signature and response keys used by main.py.
-    """
+    """Create relevance-ranked, diversity-aware recommendations."""
     normalized_category = normalize(category)
 
     category_name = next(
@@ -1193,15 +1198,6 @@ def create_recommendation_request(
                 "match_score": (
                     recommendation or {}
                 ).get("score", 0),
-                "food_group": (
-                    recommendation or {}
-                ).get("diversity_group"),
-                "movie_franchise": (
-                    recommendation or {}
-                ).get("movie_franchise"),
-                "movie_style": (
-                    recommendation or {}
-                ).get("movie_diversity_group"),
                 "has_description": bool(
                     metadata.get("description")
                 ),
@@ -1253,15 +1249,3 @@ def create_recommendation_request(
         ),
         "source": "Qloo",
     }
-
-
-
-
-
-
-
-
-
-
-
-
