@@ -527,6 +527,16 @@ def research_cultural_data(
 
         # Search entities as a fallback when insights fail or return no data.
         search_results = search_entity(phrase, category)
+        logger.info(
+        "QLOO ENTITY SEARCH RESULTS: category=%s phrase=%s count=%s names=%s",
+        category,
+        phrase,
+        len(search_results),
+    [
+        item.get("name") or item.get("title")
+        for item in search_results[:10]
+    ],
+        )
 
         if search_results:
             methods.append("entity_search")
