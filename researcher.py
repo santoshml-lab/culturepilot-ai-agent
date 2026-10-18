@@ -349,7 +349,17 @@ def search_tag(query: str, category: str) -> list[dict]:
             or tag.get("title")
             or tag.get("label")
         )
-        logger.info("QLOO RAW TAG: %s", tag)
+        print(
+            "[QLOO TAG DEBUG]",
+           {
+         "query": query,
+        "name": tag.get("name") or tag.get("title") or tag.get("label"),
+        "id": tag.get("id"),
+        "tag_id": tag.get("tag_id"),
+        "entity_id": tag.get("entity_id"),
+          },
+          flush=True,
+        )
 
 
         
