@@ -463,7 +463,7 @@ def research_cultural_data(
 
             elif category != "Travel":
                 collected.extend(entities)
-i
+
             
 
         # Tags can provide additional signals for non-Travel categories.
