@@ -371,6 +371,21 @@ def search_tag(query: str, category: str) -> list[dict]:
             exact.append(tag)
         elif query_text in name or name in query_text:
             partial.append(tag)
+            selected_tags = (exact + partial)[:5]
+
+            print(
+                "[QLOO SELECTED TAGS]",
+    [
+        {
+                "name": tag.get("name") or tag.get("title") or tag.get("label"),
+                "id": tag.get("id"),
+        }
+        for tag in selected_tags
+    ],
+    flush=True,
+)
+
+return selected_tags
 
     return (exact + partial)[:5]
 
