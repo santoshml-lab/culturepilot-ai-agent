@@ -17,7 +17,7 @@ SEARCH_TYPES = {
     "Movies": "urn:entity:movie",
     "Music": "urn:entity:artist",
     "Food": "urn:entity:place",
-    "Travel": "urn:entity:destination",
+    "Travel": "urn:entity:place",
 }
 
 # Entity type used for recommendations.
