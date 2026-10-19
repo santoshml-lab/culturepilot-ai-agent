@@ -352,7 +352,22 @@ def search_entity(
         },
     )
 
-    return extract_entities(payload)
+    entities = extract_entities(payload)
+
+    logger.info(
+        "QLOO SEARCH: category=%s, query=%s, results=%s, names=%s",
+        category,
+        phrase,
+        len(entities),
+        [entity_name(entity) for entity in entities[:10]],
+    )
+
+    return entities
+
+
+
+
+    
 
 
 def get_insights(
