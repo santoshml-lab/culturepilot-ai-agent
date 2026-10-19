@@ -632,9 +632,20 @@ def research_cultural_data(
                         interests=[phrase],
                     )
 
+                    
                     if insights:
-                        methods.append("entity_insights")
-                        add_results(insights)
+                        if normalized_category == "Food":
+                            insights = filter_food_entities(insights)
+
+                        if insights:
+                            methods.append("entity_insights")
+                            add_results(insights)
+                   else:
+    # Preserve the existing non-travel fallback.
+                       add_results(entities)
+
+                        
+                        
                     else:
                         # Preserve the existing non-travel fallback.
                         add_results(entities)
