@@ -12,7 +12,6 @@ QLOO_BASE_URL = "https://hackathon.api.qloo.com"
 TIMEOUT = 35
 RESULT_LIMIT = 10
 
-# Entity type used to find the user's starting interest.
 SEARCH_TYPES = {
     "Movies": "urn:entity:movie",
     "Music": "urn:entity:artist",
@@ -20,7 +19,6 @@ SEARCH_TYPES = {
     "Travel": "urn:entity:place",
 }
 
-# Entity type used for recommendations.
 INSIGHT_TYPES = {
     "Movies": "urn:entity:movie",
     "Music": "urn:entity:artist",
@@ -28,7 +26,6 @@ INSIGHT_TYPES = {
     "Travel": "urn:entity:place",
 }
 
-# Country codes supported by Qloo's geocode filter.
 COUNTRY_CODES = {
     "japan": "JP",
     "india": "IN",
@@ -184,23 +181,16 @@ def qloo_get(
 
 def extract_entities(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
-        return [
-            item for item in payload
-            if isinstance(item, dict)
-        ]
+        return [item for item in payload if isinstance(item, dict)]
 
     if not isinstance(payload, dict):
         return []
 
-    # Qloo responses may wrap results in nested objects.
     for key in ("results", "entities", "items", "data"):
         value = payload.get(key)
 
         if isinstance(value, list):
-            return [
-                item for item in value
-                if isinstance(item, dict)
-            ]
+            return [item for item in value if isinstance(item, dict)]
 
         if isinstance(value, dict):
             nested = extract_entities(value)
@@ -269,68 +259,35 @@ def entity_text(entity: dict[str, Any]) -> str:
         if value:
             parts.append(normalize_text(value))
 
-    return " ".join(
-        part for part in parts if part
-    ).casefold()
+    return " ".join(part for part in parts if part).casefold()
 
 
 def filter_food_entities(
     entities: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     food_terms = (
-        "restaurant",
-        "food",
-        "cafe",
-        "café",
-        "bakery",
-        "cuisine",
-        "dining",
-        "barbecue",
-        "street food",
-        "sushi",
-        "ramen",
-        "izakaya",
-        "noodle",
-        "pizza",
-        "seafood",
-        "food court",
-        "eatery",
-        "bistro",
-        "diner",
-        "tea house",
-        "tea shop",
-        "sushi bar",
+        "restaurant", "food", "cafe", "café", "bakery",
+        "cuisine", "dining", "barbecue", "street food",
+        "sushi", "ramen", "izakaya", "noodle", "pizza",
+        "seafood", "food court", "eatery", "bistro",
+        "diner", "tea house", "tea shop", "sushi bar",
     )
 
     non_food_terms = (
-        "hotel",
-        "inn",
-        "ryokan",
-        "hostel",
-        "resort",
-        "accommodation",
-        "lodging",
-        "guesthouse",
-        "guest house",
-        "hot spring",
-        "onsen",
-        "museum",
-        "airport",
-        "train station",
-        "shopping mall",
+        "hotel", "inn", "ryokan", "hostel", "resort",
+        "accommodation", "lodging", "guesthouse",
+        "guest house", "hot spring", "onsen", "museum",
+        "airport", "train station", "shopping mall",
     )
 
     filtered = []
 
     for entity in entities:
         properties = get_entity_properties(entity)
-
         name = entity_name(entity).casefold()
 
         description = " ".join(
-            normalize_text(
-                properties.get(key, entity.get(key))
-            )
+            normalize_text(properties.get(key, entity.get(key)))
             for key in (
                 "type",
                 "subtype",
@@ -342,11 +299,9 @@ def filter_food_entities(
 
         combined = f"{name} {description}"
 
-        # Reject clearly unrelated places, especially lodging.
         if any(term in combined for term in non_food_terms):
             continue
 
-        # Keep only entities with a recognizable food connection.
         if any(term in combined for term in food_terms):
             filtered.append(entity)
 
@@ -358,11 +313,6 @@ def filter_food_entities(
     )
 
     return filtered
-
-
-
-
-        
 
 
 def search_tag(
@@ -379,10 +329,7 @@ def search_tag(
         )
         return extract_entities(payload)
 
-    except (
-        requests.RequestException,
-        RuntimeError,
-    ) as exc:
+    except (requests.RequestException, RuntimeError) as exc:
         logger.info("Qloo tag search unavailable: %s", exc)
         return []
 
@@ -435,13 +382,10 @@ def get_insights(
         "take": RESULT_LIMIT,
     }
 
-    # Restrict travel recommendations to the requested country
-    # whenever the interest maps to a known country code.
     if category == "Travel":
-        phrases = interests or []
         country_code = None
 
-        for phrase in phrases:
+        for phrase in interests or []:
             key = normalize_text(phrase).casefold()
 
             if key in COUNTRY_CODES:
@@ -455,8 +399,6 @@ def get_insights(
                 country_code,
             )
         else:
-            # Do not request broad global place recommendations
-            # when the country cannot be safely identified.
             logger.info(
                 "Travel country code not recognized; "
                 "skipping unrestricted Insights."
@@ -558,10 +500,7 @@ def research_cultural_data(
             break
 
         try:
-            entities = search_entity(
-                phrase,
-                normalized_category,
-            )
+            entities = search_entity(phrase, normalized_category)
 
             logger.info(
                 "Qloo entity search: category=%s phrase=%s count=%d",
@@ -578,8 +517,6 @@ def research_cultural_data(
             if normalized_category == "Food":
                 entities = filter_food_entities(entities)
 
-            # Keep direct destination search results only if their
-            # names actually match the requested travel interest.
             if normalized_category == "Travel":
                 phrase_key = phrase.casefold()
 
@@ -617,12 +554,9 @@ def research_cultural_data(
                     )
                     errors.append(type(exc).__name__)
 
-                # A matched country entity is a safe fallback,
-                # unlike unrelated attractions from another country.
                 if not collected and matching_destinations:
                     add_results(matching_destinations)
-                    if matching_destinations:
-                        methods.append("destination_search_fallback")
+                    methods.append("destination_search_fallback")
 
             else:
                 try:
@@ -632,29 +566,23 @@ def research_cultural_data(
                         interests=[phrase],
                     )
 
-                    
-                    
-             if insights:
-      if normalized_category == "Food":
-        insights = filter_food_entities(insights)
+                    if insights:
+                        if normalized_category == "Food":
+                            insights = filter_food_entities(insights)
 
-    if insights:
-        methods.append("entity_insights")
-        add_results(insights)
+                        if insights:
+                            methods.append("entity_insights")
+                            add_results(insights)
 
-    # Music: supplement Insights with direct artist search results.
-    if normalized_category == "Music":
-        add_results(entities)
-else:
-    add_results(entities)
+                    # Music: supplement Insights with direct search
+                    # results so additional unique artists can be used.
+                    if normalized_category == "Music":
+                        add_results(entities)
 
-                        
-                            
-
-                        
-                        
-                    
-                        
+                    # Preserve fallback for other categories if Insights
+                    # returned no usable results.
+                    elif not insights:
+                        add_results(entities)
 
                 except (
                     requests.RequestException,
@@ -710,6 +638,7 @@ else:
         "results": collected[:RESULT_LIMIT],
         "message": message,
     }
+
 
 
 
