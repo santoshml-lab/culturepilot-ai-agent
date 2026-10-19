@@ -640,7 +640,7 @@ def research_cultural_data(
                         if insights:
                             methods.append("entity_insights")
                             add_results(insights)
-                   else:
+                    else:
     # Preserve the existing non-travel fallback.
                         add_results(entities)
 
