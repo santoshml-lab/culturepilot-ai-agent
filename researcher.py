@@ -642,7 +642,7 @@ def research_cultural_data(
                             add_results(insights)
                    else:
     # Preserve the existing non-travel fallback.
-                       add_results(entities)
+                        add_results(entities)
 
                         
                         
