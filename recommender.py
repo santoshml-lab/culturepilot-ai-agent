@@ -994,7 +994,7 @@ def score_recommendation(
     interests: Any,
     category: str,
 ) -> dict | None:
-    """Score one Qloo entity and reject weak or unrelated matches."""
+    """Score Qloo entities and prioritize relevant music genres."""
     if not isinstance(entity, dict):
         return None
 
@@ -1012,7 +1012,7 @@ def score_recommendation(
     if not category_confirmed(category, metadata):
         return None
 
-    # NEW: validate specific Travel destinations before scoring.
+    # Validate specific Travel destinations before scoring.
     if normalize(category) == "travel":
         if not travel_destination_matches(interests, metadata):
             print(
@@ -1037,6 +1037,100 @@ def score_recommendation(
         "No description was provided by Qloo."
     )
 
+    final_score = raw_score
+    relevance_note = (
+        "Matched your interests using the entity's available "
+        "description, genre, or metadata."
+    )
+
+    # Improve ranking for Music recommendations.
+    if normalize(category) == "music":
+        genre_evidence = normalize(
+            f"{metadata.get('genres', '')} "
+            f"{metadata.get('metadata', '')} "
+            f"{metadata.get('description', '')}"
+        )
+        interests_text = normalize(str(interests))
+
+        pop_requested = (
+            "pop music" in interests_text
+            or interests_text.strip() == "pop"
+        )
+
+        if pop_requested:
+            pop_terms = [
+                "pop",
+                "electropop",
+                "dance pop",
+                "synth pop",
+                "pop rock",
+                "teen pop",
+                "indie pop",
+                "dream pop",
+                "power pop",
+                "pop rap",
+                "art pop",
+                "hyperpop",
+                "k pop",
+                "j pop",
+            ]
+
+            unrelated_genres = [
+                "punk",
+                "trap",
+                "heavy metal",
+                "death metal",
+                "hardcore",
+                "grunge",
+                "country",
+                "classical",
+                "bluegrass",
+            ]
+
+            padded_evidence = f" {genre_evidence} "
+
+            has_pop_evidence = any(
+                f" {term} " in padded_evidence
+                for term in pop_terms
+            )
+
+            has_unrelated_genre = any(
+                f" {term} " in padded_evidence
+                for term in unrelated_genres
+            )
+
+            if has_pop_evidence:
+                final_score += 15
+                relevance_note = (
+                    "Prioritized because the available metadata "
+                    "contains a relevant pop genre."
+                )
+            else:
+                final_score -= 20
+                relevance_note = (
+                    "Lower priority because explicit pop-genre "
+                    "evidence was not found in the available metadata."
+                )
+
+                if has_unrelated_genre:
+                    final_score -= 15
+                    relevance_note = (
+                        "Lower priority because the available metadata "
+                        "emphasizes another genre rather than pop."
+                    )
+
+            # Reject weak matches after applying genre relevance.
+            if final_score < 60:
+                print(
+                    "[MUSIC RELEVANCE FILTER] Rejected:",
+                    title,
+                    "Raw score:",
+                    raw_score,
+                    "Adjusted score:",
+                    final_score,
+                )
+                return None
+
     recommendation = {
         "id": str(entity_id),
         "entity_id": str(entity_id),
@@ -1044,16 +1138,13 @@ def score_recommendation(
         "name": title,
         "description": description,
         "category": category,
-        "score": min(raw_score, 100),
+        "score": min(max(final_score, 0), 100),
         "matched_interests": matched_interests,
         "matched_terms": matched_phrases,
         "genres": metadata.get("genres", []),
         "image_url": get_image_url(entity),
         "source": "Qloo",
-        "reason": (
-            "Matched your interests using the entity's available "
-            "description, genre, or metadata."
-        ),
+        "reason": relevance_note,
     }
 
     if category == "Food":
@@ -1070,6 +1161,11 @@ def score_recommendation(
         )
 
     return recommendation
+
+
+
+
+    
 
 
 def select_diverse_recommendations(
