@@ -633,16 +633,23 @@ def research_cultural_data(
                     )
 
                     
-                    if insights:
-                        if normalized_category == "Food":
-                            insights = filter_food_entities(insights)
+                    
+             if insights:
+      if normalized_category == "Food":
+        insights = filter_food_entities(insights)
 
-                        if insights:
-                            methods.append("entity_insights")
-                            add_results(insights)
-                    else:
-    
-                         add_results(entities)
+    if insights:
+        methods.append("entity_insights")
+        add_results(insights)
+
+    # Music: supplement Insights with direct artist search results.
+    if normalized_category == "Music":
+        add_results(entities)
+else:
+    add_results(entities)
+
+                        
+                            
 
                         
                         
