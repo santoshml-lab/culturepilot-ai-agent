@@ -287,12 +287,45 @@ def filter_food_entities(
         "dining",
         "barbecue",
         "street food",
+        "sushi",
+        "ramen",
+        "izakaya",
+        "noodle",
+        "pizza",
+        "seafood",
+        "food court",
+        "eatery",
+        "bistro",
+        "diner",
+        "tea house",
+        "tea shop",
+        "sushi bar",
+    )
+
+    non_food_terms = (
+        "hotel",
+        "inn",
+        "ryokan",
+        "hostel",
+        "resort",
+        "accommodation",
+        "lodging",
+        "guesthouse",
+        "guest house",
+        "hot spring",
+        "onsen",
+        "museum",
+        "airport",
+        "train station",
+        "shopping mall",
     )
 
     filtered = []
 
     for entity in entities:
         properties = get_entity_properties(entity)
+
+        name = entity_name(entity).casefold()
 
         description = " ".join(
             normalize_text(
@@ -303,15 +336,33 @@ def filter_food_entities(
                 "subtype",
                 "category",
                 "description",
+                "short_description",
             )
         ).casefold()
 
-        if not description.strip() or any(
-            term in description for term in food_terms
-        ):
+        combined = f"{name} {description}"
+
+        # Reject clearly unrelated places, especially lodging.
+        if any(term in combined for term in non_food_terms):
+            continue
+
+        # Keep only entities with a recognizable food connection.
+        if any(term in combined for term in food_terms):
             filtered.append(entity)
 
+    logger.info(
+        "Food relevance filter: input=%d accepted=%d rejected=%d",
+        len(entities),
+        len(filtered),
+        len(entities) - len(filtered),
+    )
+
     return filtered
+
+
+
+
+        
 
 
 def search_tag(
