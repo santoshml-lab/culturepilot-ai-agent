@@ -1123,7 +1123,8 @@ def create_recommendation_request(
 
     category_name = next(
         (
-            value for key, value in SUPPORTED_CATEGORIES.items()
+            value
+            for key, value in SUPPORTED_CATEGORIES.items()
             if key == normalized_category
         ),
         str(category or "").strip(),
@@ -1175,13 +1176,13 @@ def create_recommendation_request(
         if entity_id in seen_ids:
             continue
 
+        metadata = get_entity_metadata(entity)
+
         recommendation = score_recommendation(
             entity=entity,
             interests=interests,
             category=category_name,
         )
-
-        metadata = get_entity_metadata(entity)
 
         print(
             "[RECOMMENDER DEBUG]",
@@ -1190,7 +1191,8 @@ def create_recommendation_request(
                 "title": metadata.get("title"),
                 "entity_type": metadata.get("entity_type"),
                 "category_ok": category_confirmed(
-                    category_name, metadata
+                    category_name,
+                    metadata,
                 ),
                 "matched_interests": (
                     recommendation or {}
@@ -1199,10 +1201,12 @@ def create_recommendation_request(
                     recommendation or {}
                 ).get("score", 0),
                 "has_description": bool(
-                    metadata.get("description"),
-                "genres": metadata.get("genres", []),
-                "metadata_preview": metadata.get("metadata", "")[:250],   
+                    metadata.get("description")
                 ),
+                "genres": metadata.get("genres", []),
+                "metadata_preview": str(
+                    metadata.get("metadata", "")
+                )[:250],
             },
         )
 
@@ -1251,3 +1255,7 @@ def create_recommendation_request(
         ),
         "source": "Qloo",
     }
+
+
+
+
