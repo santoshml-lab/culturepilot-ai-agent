@@ -1,4 +1,4 @@
-
+ò
 import os
 import re
 import logging
@@ -641,8 +641,8 @@ def research_cultural_data(
                             methods.append("entity_insights")
                             add_results(insights)
                     else:
-    # Preserve the existing non-travel fallback.
-                        add_results(entities)
+    
+                         add_results(entities)
 
                         
                         
