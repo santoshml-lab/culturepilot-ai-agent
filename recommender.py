@@ -1199,7 +1199,7 @@ def create_recommendation_request(
                     recommendation or {}
                 ).get("score", 0),
                 "has_description": bool(
-                    metadata.get("description")
+                    metadata.get("description"),
                 "genres": metadata.get("genres", []),
                 "metadata_preview": metadata.get("metadata", "")[:250],   
                 ),
