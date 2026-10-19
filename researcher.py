@@ -646,9 +646,8 @@ def research_cultural_data(
 
                         
                         
-                    else:
-                        # Preserve the existing non-travel fallback.
-                        add_results(entities)
+                    
+                        
 
                 except (
                     requests.RequestException,
