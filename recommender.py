@@ -1043,14 +1043,18 @@ def score_recommendation(
         "description, genre, or metadata."
     )
 
-    # Improve ranking for Music recommendations.
+    # Improve Music relevance and ranking.
     if normalize(category) == "music":
         genre_evidence = normalize(
-            f"{metadata.get('genres', '')} "
+            f"{' '.join(metadata.get('genres', []))} "
             f"{metadata.get('metadata', '')} "
-            f"{metadata.get('description', '')}"
+            f"{metadata.get('description', '')} "
+            f"{metadata.get('title', '')}"
         )
-        interests_text = normalize(str(interests))
+
+        interests_text = normalize(
+            " ".join(split_interests(interests))
+        )
 
         pop_requested = (
             "pop music" in interests_text
@@ -1068,7 +1072,6 @@ def score_recommendation(
                 "indie pop",
                 "dream pop",
                 "power pop",
-                "pop rap",
                 "art pop",
                 "hyperpop",
                 "k pop",
@@ -1090,36 +1093,44 @@ def score_recommendation(
             padded_evidence = f" {genre_evidence} "
 
             has_pop_evidence = any(
-                f" {term} " in padded_evidence
+                phrase_in_text(term, genre_evidence)
                 for term in pop_terms
             )
 
             has_unrelated_genre = any(
-                f" {term} " in padded_evidence
+                phrase_in_text(term, genre_evidence)
                 for term in unrelated_genres
             )
 
-            if has_pop_evidence:
+            is_pop_punk = phrase_in_text(
+                "pop punk", genre_evidence
+            )
+
+            if has_pop_evidence and (
+                not has_unrelated_genre or is_pop_punk
+            ):
                 final_score += 15
                 relevance_note = (
                     "Prioritized because the available metadata "
-                    "contains a relevant pop genre."
+                    "contains relevant pop genre evidence."
                 )
             else:
                 final_score -= 20
                 relevance_note = (
-                    "Lower priority because explicit pop-genre "
-                    "evidence was not found in the available metadata."
+                    "Lower priority because clear pop genre "
+                    "evidence is missing or competing genres "
+                    "are present."
                 )
 
-                if has_unrelated_genre:
+                if has_unrelated_genre and not is_pop_punk:
                     final_score -= 15
                     relevance_note = (
-                        "Lower priority because the available metadata "
-                        "emphasizes another genre rather than pop."
+                        "Lower priority because the available "
+                        "metadata emphasizes another genre "
+                        "rather than pop."
                     )
 
-            # Reject weak matches after applying genre relevance.
+            # Reject weak matches after genre adjustment.
             if final_score < 60:
                 print(
                     "[MUSIC RELEVANCE FILTER] Rejected:",
@@ -1161,6 +1172,15 @@ def score_recommendation(
         )
 
     return recommendation
+
+
+
+
+                
+
+    
+                
+        
 
 
 
