@@ -603,7 +603,7 @@ def match_interests(
     metadata: dict,
     category: str = "",
 ) -> tuple[list[str], int, list[str]]:
-    """Match user interests against available entity information."""
+    """Match user interests against entity information."""
     title = normalize(metadata.get("title", ""))
     description = normalize(metadata.get("description", ""))
     genres = normalize(" ".join(metadata.get("genres", [])))
@@ -614,6 +614,11 @@ def match_interests(
     matched_interests = []
     matched_phrases = []
     score = 0
+
+    searchable_text = normalize(
+        f"{title} {description} {genres} "
+        f"{other_metadata} {all_text}"
+    )
 
     travel_interest_terms = {
         "japan": [
@@ -639,7 +644,35 @@ def match_interests(
         ],
     }
 
+    music_interest_terms = {
+        "pop music": [
+            "pop", "electropop", "dance pop", "synth pop",
+            "pop rock", "teen pop", "indie pop",
+            "dream pop", "power pop", "pop rap",
+        ],
+        "hip hop": [
+            "hip hop", "hip-hop", "rap", "trap",
+        ],
+        "rock music": [
+            "rock", "alternative rock", "pop rock",
+            "hard rock", "indie rock", "punk rock",
+        ],
+        "classical music": [
+            "classical", "orchestra", "symphony",
+            "chamber music", "piano",
+        ],
+        "electronic music": [
+            "electronic", "electropop", "edm",
+            "house", "techno", "trance", "synth",
+        ],
+        "r and b": [
+            "r&b", "rnb", "rhythm and blues",
+            "contemporary r&b", "alternative r&b",
+        ],
+    }
+
     for interest in split_interests(interests):
+        normalized_interest = normalize(interest)
         alternatives = expand_interest(interest)
 
         title_match = any(
@@ -652,7 +685,8 @@ def match_interests(
             phrase_in_text(p, description) for p in alternatives
         )
         metadata_match = any(
-            phrase_in_text(p, other_metadata) for p in alternatives
+            phrase_in_text(p, other_metadata)
+            for p in alternatives
         )
 
         if title_match:
@@ -667,9 +701,32 @@ def match_interests(
         elif metadata_match:
             score += 70
 
+        elif category_name == "music":
+            music_terms = music_interest_terms.get(
+                normalized_interest, []
+            )
+
+            matched_music_terms = [
+                term for term in music_terms
+                if phrase_in_text(term, searchable_text)
+            ]
+
+            if matched_music_terms:
+                # Prefer a direct genre tag over a broad text match.
+                direct_genre_terms = [
+                    term for term in matched_music_terms
+                    if phrase_in_text(term, other_metadata)
+                ]
+
+                score += 70 if direct_genre_terms else 60
+                matched_phrases.extend(matched_music_terms)
+
+            else:
+                continue
+
         else:
             meaningful_words = [
-                word for word in interest.split()
+                word for word in normalized_interest.split()
                 if len(word) >= 4 and word not in STOP_WORDS
             ]
 
@@ -691,7 +748,7 @@ def match_interests(
 
             elif category_name == "travel":
                 travel_terms = travel_interest_terms.get(
-                    interest, []
+                    normalized_interest, []
                 )
 
                 matched_travel_terms = [
@@ -716,6 +773,14 @@ def match_interests(
         score,
         list(dict.fromkeys(matched_phrases)),
     )
+
+
+
+
+
+    
+            
+                    
 
 
 def category_confirmed(category: str, metadata: dict) -> bool:
